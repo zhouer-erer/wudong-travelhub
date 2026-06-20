@@ -2,9 +2,9 @@
  * 图片上传组件
  * 支持本地上传和 OSS 直传两种方式，提供上传进度、文件类型和大小校验
  */
-import { useState, useEffect } from 'react';
-import { Upload, message, Progress } from 'antd';
-import { PlusOutlined, LoadingOutlined } from '@ant-design/icons';
+import { useState, useEffect, useRef } from 'react';
+import { Upload, message, Modal } from 'antd';
+import { PlusOutlined, LoadingOutlined, EyeOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
 import request from '../utils/request';
 
@@ -37,6 +37,40 @@ export default function ImageUpload({
   const [loading, setLoading] = useState(false);
   /** OSS 签名凭证 */
   const [ossToken, setOssToken] = useState<any>(null);
+  /** 内部文件列表，由 antd Upload 管理，父组件 value 变化时同步 */
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  /** 预览弹窗图片 URL */
+  const [previewUrl, setPreviewUrl] = useState('');
+  /** 预览弹窗显隐 */
+  const [previewOpen, setPreviewOpen] = useState(false);
+  /** 跟踪上一次 value，避免重复同步 */
+  const prevValueRef = useRef(value);
+
+  // 父组件 value 变化时同步到内部 fileList（用于初始回显和外部重置）
+  // 不覆盖 antd 内部已有的文件条目（保持展示一致性）
+  useEffect(() => {
+    if (value !== prevValueRef.current) {
+      prevValueRef.current = value;
+      if (value) {
+        const fullUrl = getFullUrl(value);
+        const alreadyShown = fileList.some(f => f.url === fullUrl || f.response?.data?.url === value);
+        if (!alreadyShown) {
+          setFileList([{ uid: '-1', name: 'image', status: 'done', url: fullUrl }]);
+        }
+      } else {
+        setFileList([]);
+      }
+    }
+  }, [value, fileList]);
+
+  // 首次加载时从 value 初始化 fileList
+  useEffect(() => {
+    if (value && fileList.length === 0) {
+      setFileList(
+        [{ uid: '-1', name: 'image', status: 'done', url: getFullUrl(value) }]
+      );
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 获取 OSS 签名
   useEffect(() => {
@@ -59,19 +93,12 @@ export default function ImageUpload({
 
   /**
    * 将相对路径转换为完整 URL 用于预览
-   * @param url - 原始图片路径
-   * @returns 完整的图片 URL
    */
   const getFullUrl = (url: string) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
-    return `http://localhost:3001${url}`;
+    return `${window.location.origin}${url}`;
   };
-
-  /** 当前文件列表，用于 Upload 组件展示 */
-  const fileList: UploadFile[] = value
-    ? [{ uid: '-1', name: 'image', status: 'done', url: getFullUrl(value) }]
-    : [];
 
   /**
    * 自定义上传逻辑
@@ -137,6 +164,7 @@ export default function ImageUpload({
 
         const res: any = await request.post('/upload/image', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000,
         });
 
         if (res.code === 200) {
@@ -157,8 +185,11 @@ export default function ImageUpload({
   /**
    * 上传状态变更处理
    * 上传成功时回调 onChange 返回图片 URL，移除时回调空字符串
+   * 使用 antd 内部管理的 fileList 保持展示一致性
    */
-  const handleChange: UploadProps['onChange'] = ({ file }) => {
+  const handleChange: UploadProps['onChange'] = ({ file, fileList: newFileList }) => {
+    setFileList(newFileList);
+
     if (file.status === 'done') {
       const url = file.response?.data?.url;
       if (url) {
@@ -188,24 +219,57 @@ export default function ImageUpload({
     return true;
   };
 
+  /**
+   * 点击预览图片 — 弹窗展示，不跳转下载
+   */
+  const handlePreview = async (file: UploadFile) => {
+    const url = file.url || file.response?.data?.url || getFullUrl(value || '');
+    if (url) {
+      setPreviewUrl(url);
+      setPreviewOpen(true);
+    }
+  };
+
   return (
-    <Upload
-      name="files"
-      customRequest={customUpload}
-      fileList={fileList}
-      onChange={handleChange}
-      beforeUpload={beforeUpload}
-      accept={accept}
-      listType="picture-card"
-      maxCount={1}
-      onRemove={() => onChange?.('')}
-    >
-      {!value && (
-        <div>
-          {loading ? <LoadingOutlined /> : <PlusOutlined />}
-          <div style={{ marginTop: 8 }}>{loading ? '上传中...' : '上传图片'}</div>
-        </div>
-      )}
-    </Upload>
+    <>
+      <Upload
+        name="files"
+        customRequest={customUpload}
+        fileList={fileList}
+        onChange={handleChange}
+        beforeUpload={beforeUpload}
+        accept={accept}
+        listType="picture-card"
+        maxCount={1}
+        onPreview={handlePreview}
+        onRemove={() => {
+          setFileList([]);
+          onChange?.('');
+        }}
+      >
+        {fileList.length === 0 && (
+          <div>
+            {loading ? <LoadingOutlined /> : <PlusOutlined />}
+            <div style={{ marginTop: 8 }}>{loading ? '上传中...' : '上传图片'}</div>
+          </div>
+        )}
+      </Upload>
+      <Modal
+        open={previewOpen}
+        footer={null}
+        onCancel={() => setPreviewOpen(false)}
+        centered
+        width={640}
+        styles={{ body: { textAlign: 'center', padding: 0 } }}
+      >
+        {previewUrl && (
+          <img
+            alt="预览"
+            src={previewUrl}
+            style={{ maxWidth: '100%', maxHeight: '70vh', display: 'block' }}
+          />
+        )}
+      </Modal>
+    </>
   );
 }

@@ -17,7 +17,7 @@ export class MerchantAuthController {
   /**
    * 商家登录
    * POST /api/merchant-auth/login
-   * @param body - 登录信息，包含 username（用户名）和 password（密码）
+   * @param body - 登录信息，包含 username、password
    * @returns 登录成功返回 JWT token 和商家基本信息
    */
   @Post('/login')
@@ -27,19 +27,49 @@ export class MerchantAuthController {
     if (!merchant) {
       return { code: 401, message: '用户名或密码错误', data: null };
     }
+
+    // 账号被禁用
     if (merchant.status === 0) {
       return { code: 403, message: '账号已被禁用', data: null };
     }
+
+    // 账号被锁定
+    if (merchant.locked_until && new Date(merchant.locked_until) > new Date()) {
+      const lockTime = new Date(merchant.locked_until);
+      const minutes = Math.ceil((lockTime.getTime() - Date.now()) / 60000);
+      return { code: 423, message: `账号已锁定，请 ${minutes} 分钟后再试`, data: null };
+    }
+
+    // 验证密码
     const valid = bcrypt.compareSync(body.password, merchant.password_hash);
     if (!valid) {
-      return { code: 401, message: '用户名或密码错误', data: null };
+      // 密码错误，增加失败次数
+      const failCount = (merchant.login_fail_count || 0) + 1;
+      const updateData: any = { login_fail_count: failCount };
+
+      // 连续失败 5 次，锁定账号 30 分钟
+      if (failCount >= 5) {
+        const lockUntil = new Date(Date.now() + 30 * 60 * 1000);
+        updateData.locked_until = lockUntil;
+        await this.merchantService.update(merchant.id, updateData);
+        return { code: 423, message: '密码错误次数过多，账号已锁定 30 分钟', data: null };
+      }
+
+      await this.merchantService.update(merchant.id, updateData);
+      return { code: 401, message: `用户名或密码错误，剩余 ${5 - failCount} 次机会`, data: null };
     }
+
+    // 登录成功，重置失败次数
     const token = await this.jwtService.sign({
       id: merchant.id,
       username: merchant.username,
       role: 'merchant'
     });
-    await this.merchantService.update(merchant.id, { last_login_at: new Date() });
+    await this.merchantService.update(merchant.id, {
+      last_login_at: new Date(),
+      login_fail_count: 0,
+      locked_until: null,
+    });
     return {
       code: 200,
       message: 'success',

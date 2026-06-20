@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS `role` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(50) NOT NULL COMMENT '角色名称',
   `description` VARCHAR(200) DEFAULT NULL COMMENT '角色描述',
+  `type` VARCHAR(20) NOT NULL DEFAULT 'custom' COMMENT '角色类型：system-系统内置 custom-自定义',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用 0-禁用',
   `permissions` TEXT DEFAULT NULL COMMENT '菜单权限列表（JSON数组）',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -380,10 +381,10 @@ INSERT INTO `permission` (`name`, `code`, `type`, `parent_id`, `path`, `sort_ord
 ('操作日志', 'system:log', 'menu', 24, '/system/log', 23);
 
 -- 插入默认超级管理员角色
-INSERT INTO `role` (`name`, `description`, `status`) VALUES
-('超级管理员', '拥有全部权限', 1),
-('运营管理员', '内容运营管理', 1),
-('财务管理员', '财务结算管理', 1);
+INSERT INTO `role` (`name`, `description`, `type`, `status`) VALUES
+('超级管理员', '拥有全部权限', 'system', 1),
+('运营管理员', '内容运营管理', 'system', 1),
+('财务管理员', '财务结算管理', 'system', 1);
 
 -- 超级管理员拥有全部权限
 INSERT INTO `role_permission` (`role_id`, `permission_id`)
@@ -420,3 +421,17 @@ INSERT INTO `user` (`openid`, `username`, `phone`, `nickname`, `avatar`, `gender
 ('test_openid_001', 'user001', '13900001111', '苗寨游客', NULL, 1, '贵州凯里', 1),
 ('test_openid_002', 'user002', '13900002222', '旅行达人', NULL, 2, '上海', 1),
 ('test_openid_003', 'user003', '13900003333', '非遗爱好者', NULL, 1, '北京', 1);
+
+-- ============================================================
+-- 升级脚本：role 表新增 type 列（已有数据库执行）
+-- ============================================================
+ALTER TABLE `role` ADD COLUMN `type` VARCHAR(20) NOT NULL DEFAULT 'custom' COMMENT '角色类型：system-系统内置 custom-自定义' AFTER `description`;
+
+-- 将已有内置角色标记为 system
+UPDATE `role` SET `type` = 'system' WHERE `id` IN (1, 2, 3);
+
+-- ============================================================
+-- 升级脚本：merchant 表新增登录失败计数和锁定字段
+-- ============================================================
+ALTER TABLE `merchant` ADD COLUMN `login_fail_count` INT NOT NULL DEFAULT 0 COMMENT '连续登录失败次数' AFTER `last_login_at`;
+ALTER TABLE `merchant` ADD COLUMN `locked_until` DATETIME DEFAULT NULL COMMENT '锁定截止时间' AFTER `login_fail_count`;

@@ -59,6 +59,11 @@ export class RoleController {
   @Put('/update/:id')
   async update(@Param('id') id: number, @Body() body: any) {
     delete body.id;
+    // 系统内置角色不允许修改 type 字段
+    const existing = await this.roleService.findById(Number(id));
+    if (existing && existing.type === 'system') {
+      delete body.type;
+    }
     const item = await this.roleService.update(Number(id), body);
     return { code: 200, message: 'success', data: item };
   }
@@ -71,7 +76,38 @@ export class RoleController {
    */
   @Del('/delete/:id')
   async remove(@Param('id') id: number) {
+    // 系统内置角色不允许删除
+    const role = await this.roleService.findById(Number(id));
+    if (role && role.type === 'system') {
+      return { code: 403, message: '系统内置角色不允许删除', data: null };
+    }
     await this.roleService.delete(Number(id));
+    return { code: 200, message: 'success', data: null };
+  }
+
+  /**
+   * 获取角色的权限列表
+   * GET /api/roles/:id/permissions
+   * @param id - 角色 ID
+   * @returns 权限 ID 列表
+   */
+  @Get('/:id/permissions')
+  async getPermissions(@Param('id') id: number) {
+    const permIds = await this.roleService.getPermissionIds(Number(id));
+    return { code: 200, message: 'success', data: permIds };
+  }
+
+  /**
+   * 设置角色的权限
+   * PUT /api/roles/:id/permissions
+   * @param id - 角色 ID
+   * @param body - { permissionIds: number[] }
+   * @returns 操作结果
+   */
+  @Put('/:id/permissions')
+  async setPermissions(@Param('id') id: number, @Body() body: any) {
+    const permissionIds = body.permissionIds || [];
+    await this.roleService.setPermissions(Number(id), permissionIds);
     return { code: 200, message: 'success', data: null };
   }
 }

@@ -31,10 +31,10 @@ export class UploadController {
     }
 
     const file = files[0];
-    const fileBuffer = fs.readFileSync(file.path);
+    const fileBuffer = file.buffer;   // memoryStorage 直接提供 buffer，无需读磁盘
 
-    // 检查是否配置了 OSS
-    if (this.ossService.isConfigured()) {
+    // 开发环境(NODE_ENV=local)跳过 OSS，直接存本地，速度更快
+    if (process.env.NODE_ENV !== 'local' && this.ossService.isConfigured()) {
       try {
         // 上传到 OSS
         const result = await this.ossService.uploadFile(
@@ -42,9 +42,6 @@ export class UploadController {
           file.originalname,
           file.mimetype
         );
-
-        // 删除本地临时文件
-        fs.unlinkSync(file.path);
 
         return {
           code: 200,
@@ -102,18 +99,16 @@ export class UploadController {
     const results = [];
 
     for (const file of files) {
-      const fileBuffer = fs.readFileSync(file.path);
+      const fileBuffer = file.buffer;   // memoryStorage
 
-      // 检查是否配置了 OSS
-      if (this.ossService.isConfigured()) {
+      // 开发环境跳过 OSS，直接本地存储
+      if (process.env.NODE_ENV !== 'local' && this.ossService.isConfigured()) {
         try {
           const result = await this.ossService.uploadFile(
             fileBuffer,
             file.originalname,
             file.mimetype
           );
-
-          fs.unlinkSync(file.path);
 
           results.push({
             url: result.url,

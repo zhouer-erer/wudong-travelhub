@@ -20,6 +20,8 @@ export class AuthMiddleware {
       // 白名单路由（不需要认证）
       const whiteList = [
         '/api/auth/login',
+        '/api/auth/verify-sms',
+        '/api/auth/resend-sms',
         '/api/merchant-auth/login',
         '/api/announcements/list',
         '/api/carousels/list',

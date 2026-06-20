@@ -6,8 +6,8 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, message } from 'antd';
-import { UserOutlined, LockOutlined, SafetyCertificateOutlined, MobileOutlined, MessageOutlined } from '@ant-design/icons';
+import { Form, Input, Button, message, Modal, Space } from 'antd';
+import { UserOutlined, LockOutlined, SafetyCertificateOutlined, MessageOutlined } from '@ant-design/icons';
 import request from '../utils/request';
 import Captcha from '../components/Captcha';
 
@@ -95,37 +95,20 @@ function Cloud({ top, size, opacity, duration, delay, reverse }: {
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [captchaCode, setCaptchaCode] = useState('');
-  const [smsCountdown, setSmsCountdown] = useState(0);
-  const [smsLoading, setSmsLoading] = useState(false);
   const navigate = useNavigate();
   const [form] = Form.useForm();
 
-  /** 发送短信验证码 */
-  const handleSendCode = async () => {
-    try {
-      const phone = form.getFieldValue('phone');
-      if (!phone || !/^1\d{10}$/.test(phone)) {
-        message.error('请输入正确的手机号');
-        return;
-      }
-      setSmsLoading(true);
-      const res: any = await request.post('/auth/send-code', { phone });
-      if (res.code === 200) {
-        message.success('验证码已发送（请查看后端日志）');
-        setSmsCountdown(60);
-        const timer = setInterval(() => {
-          setSmsCountdown(prev => {
-            if (prev <= 1) { clearInterval(timer); return 0; }
-            return prev - 1;
-          });
-        }, 1000);
-      } else {
-        message.error(res.message || '发送失败');
-      }
-    } catch { message.error('发送失败'); } finally { setSmsLoading(false); }
-  };
+  // ── 短信二次验证弹窗状态 ──
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [smsToken, setSmsToken] = useState('');
+  const [phoneMask, setPhoneMask] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [smsCountdown, setSmsCountdown] = useState(0);
+  const [smsVerifying, setSmsVerifying] = useState(false);
+  const [smsResending, setSmsResending] = useState(false);
 
-  const onFinish = async (values: { username: string; password: string; captcha: string; smsCode?: string }) => {
+  /** 第一步：提交用户名 + 密码 */
+  const onFinish = async (values: { username: string; password: string; captcha: string }) => {
     // 图形验证码校验（不区分大小写）
     if (values.captcha.toUpperCase() !== captchaCode) {
       message.error('图形验证码错误');
@@ -138,13 +121,23 @@ export default function LoginPage() {
       const res: any = await request.post('/auth/login', {
         username: values.username,
         password: values.password,
-        code: values.smsCode || undefined,
       });
-      if (res.code === 200) {
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('admin', JSON.stringify(res.data.admin));
-        message.success('登录成功');
-        navigate('/dashboard');
+
+      if (res.code === 200 && res.data?.needSms) {
+        // 密码验证通过 → 弹出短信二次验证弹窗
+        setSmsToken(res.data.smsToken);
+        setPhoneMask(res.data.phoneMask);
+        setSmsCode('');
+        setSmsCountdown(60);
+        setSmsModalOpen(true);
+
+        // 倒计时
+        const timer = setInterval(() => {
+          setSmsCountdown(prev => {
+            if (prev <= 1) { clearInterval(timer); return 0; }
+            return prev - 1;
+          });
+        }, 1000);
       } else {
         message.error(res.message || '登录失败');
       }
@@ -152,6 +145,60 @@ export default function LoginPage() {
       message.error(err?.response?.data?.message || '登录失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** 第二步：提交短信验证码 */
+  const handleSmsVerify = async () => {
+    if (!smsCode || smsCode.length !== 6) {
+      message.error('请输入6位短信验证码');
+      return;
+    }
+    setSmsVerifying(true);
+    try {
+      const res: any = await request.post('/auth/verify-sms', {
+        smsToken,
+        code: smsCode,
+      });
+      if (res.code === 200) {
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('admin', JSON.stringify(res.data.admin));
+        message.success('登录成功');
+        setSmsModalOpen(false);
+        navigate('/dashboard');
+      } else {
+        message.error(res.message || '验证码错误');
+        setSmsCode('');
+      }
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || '验证失败');
+    } finally {
+      setSmsVerifying(false);
+    }
+  };
+
+  /** 重新发送短信验证码 */
+  const handleResendSms = async () => {
+    setSmsResending(true);
+    try {
+      const res: any = await request.post('/auth/resend-sms', { smsToken });
+      if (res.code === 200) {
+        message.success('验证码已重新发送');
+        setSmsCode('');
+        setSmsCountdown(60);
+        const timer = setInterval(() => {
+          setSmsCountdown(prev => {
+            if (prev <= 1) { clearInterval(timer); return 0; }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        message.error(res.message || '重发失败');
+      }
+    } catch {
+      message.error('重发失败');
+    } finally {
+      setSmsResending(false);
     }
   };
 
@@ -293,43 +340,6 @@ export default function LoginPage() {
               <Input.Password prefix={<LockOutlined style={{ color: 'rgba(255,255,255,0.35)' }} />} placeholder="密码"
                 style={{ height: 46, borderRadius: 10, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }} />
             </Form.Item>
-            <Form.Item name="phone" style={{ marginBottom: 18 }}>
-              <Input prefix={<MobileOutlined style={{ color: 'rgba(255,255,255,0.35)' }} />} placeholder="手机号（二次验证）"
-                maxLength={11}
-                style={{ height: 46, borderRadius: 10, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }} />
-            </Form.Item>
-            <Form.Item name="smsCode" style={{ marginBottom: 18 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <Input
-                  prefix={<MessageOutlined style={{ color: 'rgba(255,255,255,0.35)' }} />}
-                  placeholder="短信验证码（任意6位数字）"
-                  maxLength={6}
-                  style={{
-                    flex: 1,
-                    height: 46,
-                    borderRadius: 10,
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    color: '#fff',
-                  }}
-                />
-                <Button
-                  onClick={handleSendCode}
-                  loading={smsLoading}
-                  disabled={smsCountdown > 0}
-                  style={{
-                    height: 46,
-                    borderRadius: 10,
-                    minWidth: 120,
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    color: 'rgba(255,255,255,0.7)',
-                  }}
-                >
-                  {smsCountdown > 0 ? `${smsCountdown}s` : '获取验证码'}
-                </Button>
-              </div>
-            </Form.Item>
             <Form.Item name="captcha" rules={[{ required: true, message: '请输入验证码' }]} style={{ marginBottom: 24 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <Input
@@ -358,6 +368,64 @@ export default function LoginPage() {
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>
             默认账号：admin / admin123
           </div>
+
+          {/* ═══ 短信二次验证弹窗 ═══ */}
+          <Modal
+            title="短信二次验证"
+            open={smsModalOpen}
+            onCancel={() => setSmsModalOpen(false)}
+            footer={null}
+            closable={!smsVerifying}
+            maskClosable={false}
+            centered
+            styles={{
+              header: { background: '#fff' },
+              body: { padding: '24px 32px' },
+            }}
+          >
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <div style={{ fontSize: 14, color: '#666' }}>
+                验证码已发送至 <span style={{ fontWeight: 600, color: '#1F5FA8' }}>{phoneMask}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#999' }}>
+                💡 演示模式：任意6位数字均可通过
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <Input
+                  prefix={<MessageOutlined style={{ color: '#999' }} />}
+                  placeholder="请输入6位短信验证码"
+                  maxLength={6}
+                  value={smsCode}
+                  onChange={e => setSmsCode(e.target.value)}
+                  onPressEnter={handleSmsVerify}
+                  style={{ flex: 1, height: 46, borderRadius: 8 }}
+                />
+                {smsCountdown > 0 ? (
+                  <span style={{ fontSize: 13, color: '#999', whiteSpace: 'nowrap', minWidth: 60, textAlign: 'center' }}>
+                    {smsCountdown}s
+                  </span>
+                ) : (
+                  <Button
+                    type="link"
+                    loading={smsResending}
+                    onClick={handleResendSms}
+                    style={{ fontSize: 13, padding: 0, minWidth: 60, height: 32 }}
+                  >
+                    重新发送
+                  </Button>
+                )}
+              </div>
+              <Button
+                type="primary"
+                block
+                loading={smsVerifying}
+                onClick={handleSmsVerify}
+                style={{ height: 44, borderRadius: 8, fontSize: 15, fontWeight: 600 }}
+              >
+                确认验证
+              </Button>
+            </Space>
+          </Modal>
         </div>
       </div>
     </div>

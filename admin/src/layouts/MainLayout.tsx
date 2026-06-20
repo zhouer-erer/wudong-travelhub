@@ -7,7 +7,7 @@
  * - Logo 区域底部有苗族蜡染几何纹样装饰带
  * - 内容区使用圆角卡片和品牌阴影
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Button, Dropdown, Space, message, Avatar } from 'antd';
 import {
@@ -27,86 +27,95 @@ import {
   SettingOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
+import request from '../utils/request';
 
 const { Header, Sider, Content } = Layout;
 
-/** 侧边栏菜单配置项 */
-const menuItems = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '数据看板' },
+/** 侧边栏菜单配置项（permissionCode 对应 permission 表的 code 字段） */
+const allMenuItems = [
+  { key: '/dashboard', icon: <DashboardOutlined />, label: '数据看板', permissionCode: 'dashboard' },
   {
     key: 'admin-mgmt',
     icon: <SafetyCertificateOutlined />,
     label: '管理员管理',
+    permissionCode: 'admin:manage',
     children: [
-      { key: '/admin/list', label: '管理员列表' },
-      { key: '/role/list', label: '角色管理' },
+      { key: '/admin/list', label: '管理员列表', permissionCode: 'admin:list' },
+      { key: '/role/list', label: '角色管理', permissionCode: 'admin:role' },
     ],
   },
   {
     key: 'user-mgmt',
     icon: <TeamOutlined />,
     label: '用户管理',
+    permissionCode: 'user:manage',
     children: [
-      { key: '/user/list', label: '用户列表' },
+      { key: '/user/list', label: '用户列表', permissionCode: 'user:list' },
     ],
   },
   {
     key: 'merchant-mgmt',
     icon: <ShopOutlined />,
     label: '商家管理',
+    permissionCode: 'merchant:manage',
     children: [
-      { key: '/merchant/list', label: '商家列表' },
-      { key: '/merchant/application', label: '入驻审核' },
+      { key: '/merchant/list', label: '商家列表', permissionCode: 'merchant:list' },
+      { key: '/merchant/application', label: '入驻审核', permissionCode: 'merchant:application' },
     ],
   },
   {
     key: 'content-mgmt',
     icon: <FileTextOutlined />,
     label: '内容管理',
+    permissionCode: 'content:manage',
     children: [
-      { key: '/content/announcement', label: '公告管理' },
-      { key: '/content/carousel', label: '轮播图管理' },
-      { key: '/content/banner', label: '活动横幅' },
-      { key: '/content/recommendation', label: '推荐位管理' },
+      { key: '/content/announcement', label: '公告管理', permissionCode: 'content:announcement' },
+      { key: '/content/carousel', label: '轮播图管理', permissionCode: 'content:carousel' },
+      { key: '/content/banner', label: '活动横幅', permissionCode: 'content:banner' },
+      { key: '/content/recommendation', label: '推荐位管理', permissionCode: 'content:recommendation' },
     ],
   },
   {
     key: 'order-mgmt',
     icon: <ShoppingCartOutlined />,
     label: '订单管理',
+    permissionCode: 'order:manage',
     children: [
-      { key: '/order/list', label: '全局订单' },
-      { key: '/order/refund', label: '退款审批' },
-      { key: '/order/abnormal', label: '异常订单' },
+      { key: '/order/list', label: '全局订单', permissionCode: 'order:list' },
+      { key: '/order/refund', label: '退款审批', permissionCode: 'order:refund' },
+      { key: '/order/abnormal', label: '异常订单', permissionCode: 'order:abnormal' },
     ],
   },
   {
     key: 'message-mgmt',
     icon: <MessageOutlined />,
     label: '消息中心',
+    permissionCode: 'message:manage',
     children: [
-      { key: '/message/list', label: '系统消息' },
-      { key: '/message/template', label: '消息模板' },
+      { key: '/message/list', label: '系统消息', permissionCode: 'message:list' },
+      { key: '/message/template', label: '消息模板', permissionCode: 'message:template' },
     ],
   },
   {
     key: 'finance-mgmt',
     icon: <DollarOutlined />,
     label: '财务结算',
+    permissionCode: 'finance:manage',
     children: [
-      { key: '/finance/list', label: '结算列表' },
-      { key: '/finance/report', label: '财务报表' },
-      { key: '/finance/reconciliation', label: '对账管理' },
+      { key: '/finance/list', label: '结算列表', permissionCode: 'finance:list' },
+      { key: '/finance/report', label: '财务报表', permissionCode: 'finance:report' },
+      { key: '/finance/reconciliation', label: '对账管理', permissionCode: 'finance:reconciliation' },
     ],
   },
   {
     key: 'system-mgmt',
     icon: <SettingOutlined />,
     label: '系统设置',
+    permissionCode: 'system:manage',
     children: [
-      { key: '/system/config', label: '系统配置' },
-      { key: '/system/sensitive', label: '敏感词库' },
-      { key: '/system/log', label: '操作日志' },
+      { key: '/system/config', label: '系统配置', permissionCode: 'system:config' },
+      { key: '/system/sensitive', label: '敏感词库', permissionCode: 'system:sensitive' },
+      { key: '/system/log', label: '操作日志', permissionCode: 'system:log' },
     ],
   },
 ];
@@ -118,11 +127,47 @@ const menuItems = [
 export default function MainLayout() {
   /** 侧边栏折叠状态 */
   const [collapsed, setCollapsed] = useState(false);
+  /** 当前管理员拥有的权限码集合 */
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
   /** 从本地存储解析当前登录管理员信息 */
   const adminStr = localStorage.getItem('admin');
   const admin = adminStr ? JSON.parse(adminStr) : {};
+
+  /** 加载当前管理员的权限列表 */
+  const loadPermissions = async () => {
+    try {
+      const res: any = await request.get('/auth/permissions');
+      if (res.code === 200 && Array.isArray(res.data)) {
+        setPermissions(new Set(res.data));
+      }
+    } catch {
+      // token 无效时不做处理
+    }
+  };
+
+  useEffect(() => { loadPermissions(); }, []);
+
+  /** 根据权限过滤菜单：有 permissionCode 的项必须在权限集合中；父菜单至少有一个子菜单可见才显示 */
+  const filterByPermissions = (items: any[]): any[] => {
+    return items
+      .filter((item: any) => {
+        if (item.permissionCode && !permissions.has(item.permissionCode)) return false;
+        return true;
+      })
+      .map((item: any) => {
+        if (item.children) {
+          const filteredChildren = filterByPermissions(item.children);
+          if (filteredChildren.length === 0 && !item.key.startsWith('/')) return null;
+          return { ...item, children: filteredChildren };
+        }
+        return item;
+      })
+      .filter(Boolean);
+  };
+
+  const menuItems = filterByPermissions(allMenuItems);
 
   /** 退出登录，清除本地凭证并跳转登录页 */
   const handleLogout = () => {
@@ -141,7 +186,7 @@ export default function MainLayout() {
 
   /** 根据当前路径计算需要展开的菜单项 */
   const openKeys = menuItems
-    .filter((item) => item.children?.some((c) => c.key === location.pathname))
+    .filter((item: any) => item.children?.some((c: any) => c.key === location.pathname))
     .map((item) => item.key);
 
   return (

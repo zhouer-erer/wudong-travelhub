@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Put, Del, Inject, Query, Body, Param } from '@midwayjs/decorator';
 import { MerchantService } from '../service/merchant.service';
+import { RedisService } from '../service/redis.service';
 
 /**
  * 商家控制器
@@ -9,6 +10,9 @@ import { MerchantService } from '../service/merchant.service';
 export class MerchantController {
   @Inject()
   merchantService: MerchantService;
+
+  @Inject()
+  redisService: RedisService;
 
   /**
    * 获取商家列表（分页）
@@ -40,15 +44,18 @@ export class MerchantController {
   /**
    * 强制商家下线
    * POST /api/merchants/force-offline/:id
-   * 清空商家登录时间，使其商家后台登录态失效
+   * 将当前时间戳写入 Redis，使该时间点之前签发的所有 token 失效
    * @param id - 商家 ID
    */
   @Post('/force-offline/:id')
   async forceOffline(@Param('id') id: number) {
     const item = await this.merchantService.findById(Number(id));
     if (!item) return { code: 404, message: '商家不存在', data: null };
+    // 记录强制下线时间戳，token 签发时间早于此时间的请求将被拒绝
+    const offlineTime = Date.now();
+    await this.redisService.set(`merchant:offline:${id}`, String(offlineTime), 86400 * 7);
     await this.merchantService.update(Number(id), { last_login_at: null } as any);
-    console.log(`[强制下线] 商家 ID: ${id}, 店铺: ${item.shop_name}, 操作时间: ${new Date().toISOString()}`);
+    console.log(`[强制下线] 商家 ID: ${id}, 店铺: ${item.shop_name}, 时间戳: ${offlineTime}`);
     return { code: 200, message: `已将「${item.shop_name}」强制下线`, data: null };
   }
 

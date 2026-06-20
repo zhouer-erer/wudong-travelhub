@@ -2,6 +2,7 @@ import { Provide } from '@midwayjs/decorator';
 import { InjectEntityModel } from '@midwayjs/typeorm';
 import { Repository } from 'typeorm';
 import { Role } from '../entity/role.entity';
+import { RolePermission } from '../entity/role-permission.entity';
 
 /**
  * 角色服务
@@ -11,6 +12,9 @@ import { Role } from '../entity/role.entity';
 export class RoleService {
   @InjectEntityModel(Role)
   roleRepo: Repository<Role>;
+
+  @InjectEntityModel(RolePermission)
+  rolePermRepo: Repository<RolePermission>;
 
   /**
    * 分页查询角色列表
@@ -70,5 +74,30 @@ export class RoleService {
    */
   async delete(id: number) {
     return await this.roleRepo.update(id, { is_deleted: 1 });
+  }
+
+  /**
+   * 获取角色的权限 ID 列表
+   * @param roleId 角色 ID
+   * @returns 权限 ID 数组
+   */
+  async getPermissionIds(roleId: number): Promise<number[]> {
+    const records = await this.rolePermRepo.find({ where: { role_id: roleId, is_deleted: 0 } });
+    return records.map(r => r.permission_id);
+  }
+
+  /**
+   * 设置角色的权限（全量替换）
+   * @param roleId 角色 ID
+   * @param permissionIds 权限 ID 数组
+   */
+  async setPermissions(roleId: number, permissionIds: number[]) {
+    // 软删除旧权限
+    await this.rolePermRepo.update({ role_id: roleId, is_deleted: 0 }, { is_deleted: 1 });
+    // 插入新权限
+    if (permissionIds.length > 0) {
+      const entities = permissionIds.map(pid => this.rolePermRepo.create({ role_id: roleId, permission_id: pid }));
+      await this.rolePermRepo.save(entities);
+    }
   }
 }

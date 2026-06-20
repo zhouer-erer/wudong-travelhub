@@ -3,7 +3,7 @@
  * 展示管理员账号列表，支持按用户名/姓名搜索、新增、编辑、删除操作
  */
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag } from 'antd';
+import { Table, Button, Space, Input, Modal, Form, Select, message, Popconfirm, Tag, Tooltip } from 'antd';
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import request from '../../utils/request';
 
@@ -110,14 +110,24 @@ export default function AdminListPage() {
     { title: '状态', dataIndex: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag> },
     { title: '最后登录', dataIndex: 'last_login_at' },
     {
-      title: '操作', render: (_: any, record: any) => (
-        <Space>
-          <Button type="link" icon={<EditOutlined />} onClick={() => openModal(record)}>编辑</Button>
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
+      title: '操作', width: 160, fixed: 'right' as const, render: (_: any, record: any) => {
+        const role = roles.find(r => r.id === record.role_id);
+        const isSystemRole = role?.type === 'system';
+        return (
+          <Space>
+            <Button type="link" icon={<EditOutlined />} onClick={() => openModal(record)}>编辑</Button>
+            {isSystemRole ? (
+              <Tooltip title="系统内置角色，不允许删除">
+                <Button type="link" danger icon={<DeleteOutlined />} disabled>删除</Button>
+              </Tooltip>
+            ) : (
+              <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
+                <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -129,14 +139,14 @@ export default function AdminListPage() {
         <Button type="primary" onClick={onSearch}>搜索</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>新增管理员</Button>
       </Space>
-      <Table rowKey="id" columns={columns} dataSource={data} loading={loading}
+      <Table rowKey="id" columns={columns} dataSource={data} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, showTotal: t => `共 ${t} 条`, onChange: (p, ps) => { setPage(p); setPageSize(ps); } }} />
       <Modal title={editing ? '编辑管理员' : '新增管理员'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose>
         <Form form={form} layout="vertical">
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="password" label="密码" rules={editing ? [] : [{ required: true }]}><Input.Password placeholder={editing ? '留空不修改' : ''} /></Form.Item>
           <Form.Item name="name" label="姓名" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="phone" label="手机号"><Input /></Form.Item>
+          <Form.Item name="phone" label="手机号" rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1\d{10}$/, message: '请输入正确的11位手机号' }]}><Input maxLength={11} /></Form.Item>
           <Form.Item name="role_id" label="角色"><Select options={roles.map(r => ({ label: r.name, value: r.id }))} allowClear placeholder="选择角色" /></Form.Item>
           <Form.Item name="status" label="状态" initialValue={1}><Select options={[{ label: '启用', value: 1 }, { label: '禁用', value: 0 }]} /></Form.Item>
         </Form>

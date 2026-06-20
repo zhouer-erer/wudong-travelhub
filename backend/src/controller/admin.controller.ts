@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Put, Del, Inject, Query, Body, Param } from '@midwayjs/decorator';
 import { AdminService } from '../service/admin.service';
+import { RoleService } from '../service/role.service';
 
 /**
  * 管理员控制器
@@ -9,6 +10,9 @@ import { AdminService } from '../service/admin.service';
 export class AdminController {
   @Inject()
   adminService: AdminService;
+
+  @Inject()
+  roleService: RoleService;
 
   /**
    * 获取管理员列表（分页）
@@ -81,6 +85,14 @@ export class AdminController {
    */
   @Del('/delete/:id')
   async remove(@Param('id') id: number) {
+    // 系统内置角色的管理员不允许删除
+    const admin = await this.adminService.findById(Number(id));
+    if (admin && admin.role_id) {
+      const role = await this.roleService.findById(admin.role_id);
+      if (role && role.type === 'system') {
+        return { code: 403, message: '系统内置角色的管理员不允许删除', data: null };
+      }
+    }
     await this.adminService.delete(Number(id));
     return { code: 200, message: 'success', data: null };
   }

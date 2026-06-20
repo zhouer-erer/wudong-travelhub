@@ -1,6 +1,6 @@
 /**
  * HTTP 请求工具模块
- * 基于 axios 封装统一的请求实例，自动注入 token、处理 401 登录过期
+ * 基于 axios 封装统一的请求实例，自动注入 token、处理 401 登录过期、格式化日期
  */
 import axios from 'axios';
 import { message } from 'antd';
@@ -28,15 +28,49 @@ request.interceptors.request.use((config) => {
 });
 
 /**
+ * 判断字符串是否为 ISO 8601 日期格式
+ * 匹配：2026-06-20T12:16:48.000Z、2026-06-20T12:16:48Z 等
+ */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
+
+/** 将 ISO 日期字符串转为 yyyy-MM-dd HH:mm:ss */
+function formatISODate(str: string): string {
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return str;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** 递归遍历对象/数组，将所有 ISO 日期字符串原地转换 */
+function transformDates(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') {
+    return ISO_DATE_RE.test(obj) ? formatISODate(obj) : obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(transformDates);
+  }
+  if (typeof obj === 'object') {
+    for (const key of Object.keys(obj)) {
+      obj[key] = transformDates(obj[key]);
+    }
+  }
+  return obj;
+}
+
+/**
  * 响应拦截器
- * 处理 401 登录过期自动跳转登录页，网络错误统一提示
- * 根据当前路径判断跳转管理员登录还是商家登录
+ * - 自动转换所有 ISO 日期字符串为 yyyy-MM-dd HH:mm:ss 格式
+ * - 处理 401 登录过期自动跳转登录页，网络错误统一提示
+ * - 根据当前路径判断跳转管理员登录还是商家登录
  */
 request.interceptors.response.use(
   (response) => {
-    const { data } = response;
-    if (data.code === 401) {
-      message.error('登录已过期，请重新登录');
+    const { data, config } = response;
+    // 登录接口的 401 是密码错误，不跳转登录页
+    const isLoginApi = config.url?.includes('/login');
+    if (data.code === 401 && !isLoginApi) {
+      message.error(data.message || '登录已过期，请重新登录');
       const isMerchant = window.location.pathname.startsWith('/merchant-portal');
       if (isMerchant) {
         localStorage.removeItem('merchant_token');
@@ -49,10 +83,32 @@ request.interceptors.response.use(
       }
       return Promise.reject(new Error('未登录'));
     }
-    return data;
+    // 递归转换所有 ISO 日期字符串
+    return transformDates(data);
   },
   (error) => {
-    message.error(error.message || '网络错误');
+    if (error.response) {
+      const { status, data } = error.response;
+      if (status === 401) {
+        const msg = data?.message || '登录已过期，请重新登录';
+        const isMerchant = window.location.pathname.startsWith('/merchant-portal');
+        message.error(msg, 2, () => {
+          if (isMerchant) {
+            localStorage.removeItem('merchant_token');
+            localStorage.removeItem('merchant');
+            window.location.href = '/merchant-portal/login';
+          } else {
+            localStorage.removeItem('token');
+            localStorage.removeItem('admin');
+            window.location.href = '/login';
+          }
+        });
+        return Promise.reject(error);
+      }
+      message.error(data?.message || `请求失败 (${status})`);
+    } else {
+      message.error(error.message || '网络错误');
+    }
     return Promise.reject(error);
   }
 );

@@ -56,6 +56,12 @@ export class Merchant {
   @Column({ type: 'datetime', nullable: true, comment: '最后登录时间' })
   last_login_at: Date;
 
+  @Column({ type: 'int', default: 0, comment: '连续登录失败次数' })
+  login_fail_count: number;
+
+  @Column({ type: 'datetime', nullable: true, comment: '锁定截止时间' })
+  locked_until: Date;
+
   @Column({ type: 'tinyint', default: 0, comment: '软删除标记' })
   is_deleted: number;
 }

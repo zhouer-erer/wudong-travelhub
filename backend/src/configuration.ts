@@ -40,20 +40,9 @@ export class ContainerLifeCycle {
       prefix: '/uploads',
     }));
 
-    // 配置 multer 文件上传
-    const storage = multer.diskStorage({
-      destination: (req: any, file: any, cb: any) => {
-        cb(null, uploadsDir);
-      },
-      filename: (req: any, file: any, cb: any) => {
-        const ext = file.originalname.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-        cb(null, fileName);
-      },
-    });
-
+    // 配置 multer 文件上传（memoryStorage 避免磁盘 I/O，上传文件直接存在内存中）
     const upload = multer({
-      storage,
+      storage: multer.memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (req: any, file: any, cb: any) => {
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
@@ -88,12 +77,15 @@ export class ContainerLifeCycle {
       // 白名单路由（不需要认证）
       const whiteList = [
         '/api/auth/login',
+        '/api/auth/verify-sms',
+        '/api/auth/resend-sms',
         '/api/merchant-auth/login',
         '/api/announcements/list',
         '/api/carousels/list',
         '/api/activity-banners/list',
         '/api/recommendations/list',
         '/api/upload/file',
+        '/api/upload/image',
         '/api/upload/oss-token',
       ];
 
@@ -129,6 +121,19 @@ export class ContainerLifeCycle {
               ctx.status = 401;
               ctx.body = { code: 401, message: '商家账号已被禁用', data: null };
               return;
+            }
+
+            // 检查是否被强制下线：token 签发时间早于强制下线时间则拒绝
+            try {
+              const redisService = await ctx.requestContext.getAsync('redisService');
+              const offlineTime = await redisService.get(`merchant:offline:${payload.id}`);
+              if (offlineTime && payload.iat * 1000 < Number(offlineTime)) {
+                ctx.status = 401;
+                ctx.body = { code: 401, message: '账号已被强制下线，请重新登录', data: null };
+                return;
+              }
+            } catch {
+              // Redis 异常不影响正常业务
             }
 
             // 将商家信息挂载到 ctx.state

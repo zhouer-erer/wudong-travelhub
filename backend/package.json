@@ -25,6 +25,7 @@
     "bcryptjs": "^2.4.3",
     "class-validator": "^0.14.0",
     "dotenv": "^17.4.2",
+    "ioredis": "^5.11.1",
     "koa-static": "^5.0.0",
     "multer": "^2.2.0",
     "mysql2": "^3.0.0",
