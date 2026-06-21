@@ -435,3 +435,5 @@ UPDATE `role` SET `type` = 'system' WHERE `id` IN (1, 2, 3);
 -- ============================================================
 ALTER TABLE `merchant` ADD COLUMN `login_fail_count` INT NOT NULL DEFAULT 0 COMMENT '连续登录失败次数' AFTER `last_login_at`;
 ALTER TABLE `merchant` ADD COLUMN `locked_until` DATETIME DEFAULT NULL COMMENT '锁定截止时间' AFTER `login_fail_count`;
+
+ALTER TABLE merchant ADD COLUMN phone VARCHAR(20) DEFAULT NULL COMMENT '绑定手机号（登录验证/接收通知）' AFTER contact_phone;

@@ -282,15 +282,14 @@ export class MerchantDashboardController {
         .limit(30)
         .getRawMany();
 
-      // 按订单类型统计
+      // 按订单类型统计（统计所有订单，不仅仅是已完成的）
       const typeStats = await qb
         .clone()
         .select('o.order_type', 'type')
         .addSelect('COUNT(*)', 'count')
         .addSelect('SUM(o.total_amount)', 'amount')
-        .andWhere('o.status = :status', { status: 'completed' })
         .groupBy('o.order_type')
-        .orderBy('amount', 'DESC')
+        .orderBy('count', 'DESC')
         .getRawMany();
 
       // 订单类型映射

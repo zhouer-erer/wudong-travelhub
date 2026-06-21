@@ -1,21 +1,28 @@
 /**
  * 操作日志页面
  * 展示系统操作日志列表，支持按操作人和操作类型筛选
- * 操作类型包括：登录、新增、编辑、删除、审核通过、审核驳回
+ * 操作类型包括：登录、新增、编辑、删除、审核通过、审核驳回、封禁、解封、标记已读、强制下线、退款通过、退款驳回、关闭
  */
 import { useEffect, useState } from 'react';
 import { Table, Space, Input, Tag, Select } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import request from '../../utils/request';
 
-/** 操作类型显示映射 */
+/** 操作类型显示映射 - key为中文（与后端存储一致） */
 const ACTION_MAP: Record<string, { color: string; text: string }> = {
-  login: { color: 'blue', text: '登录' },
-  create: { color: 'green', text: '新增' },
-  update: { color: 'orange', text: '编辑' },
-  delete: { color: 'red', text: '删除' },
-  approve: { color: 'green', text: '审核通过' },
-  reject: { color: 'red', text: '审核驳回' },
+  '登录': { color: 'blue', text: '登录' },
+  '新增': { color: 'green', text: '新增' },
+  '编辑': { color: 'orange', text: '编辑' },
+  '删除': { color: 'red', text: '删除' },
+  '审核通过': { color: 'green', text: '审核通过' },
+  '审核驳回': { color: 'red', text: '审核驳回' },
+  '封禁': { color: 'volcano', text: '封禁' },
+  '解封': { color: 'lime', text: '解封' },
+  '标记已读': { color: 'cyan', text: '标记已读' },
+  '强制下线': { color: 'magenta', text: '强制下线' },
+  '退款通过': { color: 'green', text: '退款通过' },
+  '退款驳回': { color: 'red', text: '退款驳回' },
+  '关闭': { color: 'default', text: '关闭' },
 };
 
 /**
@@ -76,7 +83,8 @@ export default function OperationLogPage() {
       <Space style={{ marginBottom: 16 }}>
         <Input placeholder="搜索操作人" value={keyword} onChange={e => setKeyword(e.target.value)} onPressEnter={onSearch} prefix={<SearchOutlined />} style={{ width: 200 }} />
         <Select allowClear placeholder="操作类型" value={action} onChange={setAction} style={{ width: 140 }}
-          options={Object.entries(ACTION_MAP).map(([k, v]) => ({ label: v.text, value: k }))} />
+          options={Object.entries(ACTION_MAP).map(([k, v]) => ({ label: v.text, value: k }))}
+          showSearch filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())} />
       </Space>
       {/* 操作日志列表表格 */}
       <Table rowKey="id" columns={columns} dataSource={data} loading={loading}
