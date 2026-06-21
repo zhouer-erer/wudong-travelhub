@@ -4,8 +4,8 @@
  * 提供申请详情查看、审核通过、驳回（需填写原因）操作
  */
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Input, Modal, Form, message, Tag, Tabs, Descriptions, Popconfirm } from 'antd';
-import { SearchOutlined, CheckOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Input, Modal, Form, message, Tag, Tabs, Descriptions, Popconfirm, Alert } from 'antd';
+import { SearchOutlined, CheckOutlined, CloseOutlined, EyeOutlined, WarningOutlined } from '@ant-design/icons';
 import request from '../../utils/request';
 
 /** 业务模块类型映射 */
@@ -45,13 +45,33 @@ export default function ApplicationListPage() {
   const [current, setCurrent] = useState<any>(null);
   /** 驳回原因表单实例 */
   const [rejectForm] = Form.useForm();
+  /** 超时申请数据（从待审核列表中计算） */
+  const [overdueList, setOverdueList] = useState<any[]>([]);
 
   /** 加载申请列表数据 */
   const loadData = async () => {
     setLoading(true);
     try {
       const res: any = await request.get('/merchant-applications/list', { params: { page, pageSize, keyword, status } });
-      if (res.code === 200) { setData(res.data.list); setTotal(res.data.total); }
+      if (res.code === 200) {
+        setData(res.data.list);
+        setTotal(res.data.total);
+        // 待审核状态下计算超时申请（>3天），用于页面警告条展示
+        if (status === 'pending') {
+          const now = Date.now();
+          const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+          const overdue = res.data.list.filter((item: any) =>
+            now - new Date(item.created_at).getTime() > THREE_DAYS
+          ).map((item: any) => ({
+            id: item.id,
+            shopName: item.shop_name,
+            daysOverdue: Math.floor((now - new Date(item.created_at).getTime()) / (24 * 60 * 60 * 1000)),
+          }));
+          setOverdueList(overdue);
+        } else {
+          setOverdueList([]);
+        }
+      }
     } finally { setLoading(false); }
   };
 
@@ -67,7 +87,7 @@ export default function ApplicationListPage() {
    */
   const handleApprove = async (record: any) => {
     const res: any = await request.post(`/merchant-applications/approve/${record.id}`);
-    if (res.code === 200) { message.success('审核通过'); loadData(); }
+    if (res.code === 200) { message.success(res.message || '审核通过'); loadData(); }
     else message.error(res.message);
   };
 
@@ -85,7 +105,7 @@ export default function ApplicationListPage() {
   const handleReject = async () => {
     const values = await rejectForm.validateFields();
     const res: any = await request.post(`/merchant-applications/reject/${current.id}`, { reject_reason: values.reject_reason });
-    if (res.code === 200) { message.success('已驳回'); setRejectOpen(false); loadData(); }
+    if (res.code === 200) { message.success(res.message || '已驳回'); setRejectOpen(false); loadData(); }
     else message.error(res.message);
   };
 
@@ -128,6 +148,28 @@ export default function ApplicationListPage() {
   return (
     <div>
       <h2 style={{ marginBottom: 'var(--spacing-md)', fontSize: 'var(--text-h2)', fontFamily: 'var(--font-family-heading)', fontWeight: 'var(--weight-bold)', color: 'var(--color-text-primary)' }}>商家入驻审核</h2>
+      {/* 超时提醒 */}
+      {overdueList.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          message={`有 ${overdueList.length} 条入驻申请超过3个工作日未处理`}
+          description={
+            <span>
+              {overdueList.map((item: any, i: number) => (
+                <span key={item.id}>
+                  {i > 0 && '、'}
+                  「{item.shopName}」（已超{item.daysOverdue}天）
+                </span>
+              ))}
+              ，请尽快审核。
+            </span>
+          }
+          style={{ marginBottom: 16 }}
+          closable
+        />
+      )}
       {/* 状态标签页切换 */}
       <Tabs activeKey={status} onChange={setStatus} items={STATUS_TABS} />
       <Space style={{ marginBottom: 16 }}>

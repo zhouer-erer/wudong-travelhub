@@ -4,8 +4,8 @@
  * 推荐内容类型包括：商品、餐厅、民宿、路线、游记
  */
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Input, InputNumber, Modal, Form, Select, message, Popconfirm, Tag } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Input, InputNumber, Modal, Form, Select, message, Popconfirm, Tag, Alert } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import request from '../../utils/request';
 
 /** 内容类型选项配置 */
@@ -101,9 +101,9 @@ export default function RecommendationListPage() {
     { title: '名称', dataIndex: 'name' },
     {
       title: '内容类型', dataIndex: 'content_type',
-      render: (v: string) => <Tag color={CONTENT_TYPE_COLORS[v] || 'default'}>{CONTENT_TYPE_OPTIONS.find(o => o.value === v)?.label || v}</Tag>,
+      render: (v: string) => v ? <Tag color={CONTENT_TYPE_COLORS[v] || 'default'}>{CONTENT_TYPE_OPTIONS.find(o => o.value === v)?.label || v}</Tag> : <Tag>待关联</Tag>,
     },
-    { title: '内容ID', dataIndex: 'content_id' },
+    { title: '内容ID', dataIndex: 'content_id', render: (v: number) => v || '-' },
     { title: '排序', dataIndex: 'sort_order' },
     { title: '状态', dataIndex: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : <Tag color="default">禁用</Tag> },
     {
@@ -121,16 +121,24 @@ export default function RecommendationListPage() {
   return (
     <div>
       <h2 style={{ marginBottom: 'var(--spacing-md)', fontSize: 'var(--text-h2)', fontFamily: 'var(--font-family-heading)', fontWeight: 'var(--weight-bold)', color: 'var(--color-text-primary)' }}>推荐管理</h2>
+      <Alert
+        type="info"
+        showIcon
+        icon={<InfoCircleOutlined />}
+        message="内容关联功能暂未开放"
+        description="「内容类型」和「内容ID」用于关联商品、餐厅、民宿等业务数据，相关模块开发完成后即可启用。当前可先创建推荐位，这两个字段为选填。"
+        style={{ marginBottom: 16 }}
+      />
       <Space style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>新增推荐</Button>
       </Space>
       <Table rowKey="id" columns={columns} dataSource={data} loading={loading} scroll={{ x: 'max-content' }}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, showTotal: t => `共 ${t} 条`, onChange: (p, ps) => { setPage(p); setPageSize(ps); } }} />
-      <Modal title={editing ? '编辑推荐' : '新增推荐'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose>
+      <Modal title={editing ? '编辑推荐' : '新增推荐'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden>
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="content_type" label="内容类型" rules={[{ required: true }]}><Select options={CONTENT_TYPE_OPTIONS} /></Form.Item>
-          <Form.Item name="content_id" label="内容ID" rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input placeholder="如：苗寨必去、热门民宿推荐" /></Form.Item>
+          <Form.Item name="content_type" label="内容类型" tooltip="暂未开放，相关模块开发完成后可选"><Select options={CONTENT_TYPE_OPTIONS} allowClear placeholder="暂未开放，可不填" /></Form.Item>
+          <Form.Item name="content_id" label="内容ID" tooltip="暂未开放，关联内容表建成后可填"><InputNumber min={1} style={{ width: '100%' }} placeholder="暂未开放，可不填" /></Form.Item>
           <Form.Item name="sort_order" label="排序" initialValue={0}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="status" label="状态" initialValue={1}><Select options={[{ label: '启用', value: 1 }, { label: '禁用', value: 0 }]} /></Form.Item>
         </Form>

@@ -291,12 +291,19 @@ export class DashboardController {
    * 获取超时未审核的申请数量（超过3天）
    */
   private async getOverdueApplications() {
-    const count = await this.applicationRepo.createQueryBuilder('a')
+    const list = await this.applicationRepo.createQueryBuilder('a')
       .where('a.is_deleted = 0')
       .andWhere('a.status = :s', { s: 'pending' })
-      .andWhere('a.created_at < DATE_SUB(CURDATE(), INTERVAL 3 DAY)')
-      .getCount();
+      .andWhere('a.created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)')
+      .getMany();
 
-    return { count };
+    return {
+      count: list.length,
+      list: list.map(a => ({
+        id: a.id,
+        shopName: a.shop_name,
+        daysOverdue: Math.floor((Date.now() - new Date(a.created_at).getTime()) / (24 * 60 * 60 * 1000)),
+      })),
+    };
   }
 }

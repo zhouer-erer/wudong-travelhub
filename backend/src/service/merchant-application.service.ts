@@ -146,15 +146,29 @@ export class MerchantApplicationService {
       .andWhere('application.created_at < :threshold', { threshold })
       .getMany();
 
-    // 为每条超时申请创建系统消息（user_id=NULL 表示所有管理员可见）
+    // 查询今天已创建的超时提醒消息，避免重复
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const existingMessages = await this.systemMessageService.messageRepo
+      .createQueryBuilder('msg')
+      .where('msg.title = :title', { title: '入驻申请超时提醒' })
+      .andWhere('msg.created_at >= :today', { today })
+      .andWhere('msg.is_deleted = 0')
+      .getMany();
+    const existingContents = new Set(existingMessages.map(m => m.content));
+
+    // 为每条超时申请创建系统消息（去重）
     for (const app of overdueList) {
-      await this.systemMessageService.create({
-        user_id: null as any,
-        message_type: 'system',
-        title: '入驻申请超时提醒',
-        content: `商家入驻申请「${app.shop_name}」（申请人：${app.applicant_name}）已超过3个工作日未处理，请尽快审核。`,
-        is_read: 0,
-      });
+      const content = `商家入驻申请「${app.shop_name}」（申请人：${app.applicant_name}）已超过3个工作日未处理，请尽快审核。`;
+      if (!existingContents.has(content)) {
+        await this.systemMessageService.create({
+          user_id: null as any,
+          message_type: 'system',
+          title: '入驻申请超时提醒',
+          content,
+          is_read: 0,
+        });
+      }
     }
 
     return {

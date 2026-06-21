@@ -2,6 +2,7 @@ import { Controller, Post, Get, Put, Del, Inject, Query, Body, Param } from '@mi
 import { InjectEntityModel } from '@midwayjs/typeorm';
 import { Repository, LessThan, In } from 'typeorm';
 import { OrderService } from '../service/order.service';
+import { SystemMessageService } from '../service/system-message.service';
 import { Order } from '../entity/order.entity';
 
 /**
@@ -12,6 +13,9 @@ import { Order } from '../entity/order.entity';
 export class OrderController {
   @Inject()
   orderService: OrderService;
+
+  @Inject()
+  systemMessageService: SystemMessageService;
 
   @InjectEntityModel(Order)
   orderRepo: Repository<Order>;
@@ -62,6 +66,21 @@ export class OrderController {
   @Post('/create')
   async create(@Body() body: any) {
     const item = await this.orderService.create(body);
+
+    // 发送新订单通知给商家
+    if (item.merchant_id) {
+      const orderTypeMap: Record<string, string> = {
+        product: '商品', food_order: '餐饮', stay: '住宿', ticket: '门票', route: '路线',
+      };
+      await this.systemMessageService.create({
+        user_id: item.merchant_id,
+        message_type: 'order',
+        title: '新订单通知',
+        content: `您有新订单 ${item.order_no}，${orderTypeMap[item.order_type] || '商品'}订单，金额 ¥${Number(item.total_amount).toFixed(2)}，请及时处理。`,
+        is_read: 0,
+      });
+    }
+
     return { code: 200, message: 'success', data: item };
   }
 
@@ -75,7 +94,22 @@ export class OrderController {
   @Put('/update/:id')
   async update(@Param('id') id: number, @Body() body: any) {
     delete body.id;
+
+    // 查询原订单状态，判断是否为支付完成
+    const oldOrder = await this.orderService.findById(Number(id));
     const item = await this.orderService.update(Number(id), body);
+
+    // 状态变更为 paid → 发送收款到账通知给商家
+    if (oldOrder && item && body.status === 'paid' && oldOrder.status !== 'paid' && item.merchant_id) {
+      await this.systemMessageService.create({
+        user_id: item.merchant_id,
+        message_type: 'payment',
+        title: '收款到账通知',
+        content: `订单 ${item.order_no} 已完成支付，到账金额 ¥${Number(item.total_amount).toFixed(2)}。`,
+        is_read: 0,
+      });
+    }
+
     return { code: 200, message: 'success', data: item };
   }
 
@@ -89,6 +123,18 @@ export class OrderController {
   async refundApprove(@Param('id') id: number) {
     const item = await this.orderService.update(Number(id), { status: 'refund_approved' });
     if (!item) return { code: 404, message: '订单不存在', data: null };
+
+    // 发送退款审核结果通知给商家
+    if (item.merchant_id) {
+      await this.systemMessageService.create({
+        user_id: item.merchant_id,
+        message_type: 'refund',
+        title: '退款审核结果通知',
+        content: `订单 ${item.order_no} 退款申请已通过，退款金额 ¥${Number(item.total_amount).toFixed(2)}，预计1-3个工作日到账。`,
+        is_read: 0,
+      });
+    }
+
     return { code: 200, message: '退款审批通过', data: item };
   }
 
@@ -106,6 +152,18 @@ export class OrderController {
       refund_reject_reason: body.reason
     });
     if (!item) return { code: 404, message: '订单不存在', data: null };
+
+    // 发送退款审核结果通知给商家
+    if (item.merchant_id) {
+      await this.systemMessageService.create({
+        user_id: item.merchant_id,
+        message_type: 'refund',
+        title: '退款审核结果通知',
+        content: `订单 ${item.order_no} 退款申请被拒绝，原因：${body.reason || '未说明'}。`,
+        is_read: 0,
+      });
+    }
+
     return { code: 200, message: '退款已拒绝', data: item };
   }
 

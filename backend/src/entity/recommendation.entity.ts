@@ -14,10 +14,10 @@ export class Recommendation {
   @Column({ type: 'varchar', length: 100, comment: '推荐位名称' })
   name: string;
 
-  @Column({ type: 'varchar', length: 30, comment: '关联内容类型：product/restaurant/homestay/route/travel_note' })
+  @Column({ type: 'varchar', length: 30, default: '', comment: '关联内容类型：product/restaurant/homestay/route/travel_note（暂未开放，预留字段）' })
   content_type: string;
 
-  @Column({ type: 'int', comment: '关联内容ID' })
+  @Column({ type: 'int', default: 0, comment: '关联内容ID（暂未开放，预留字段）' })
   content_id: number;
 
   @Column({ type: 'int', default: 0, comment: '排序' })

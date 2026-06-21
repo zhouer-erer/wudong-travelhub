@@ -137,8 +137,20 @@ export default function DashboardPage() {
           <Alert
             type="warning"
             showIcon
+            closable
             style={{ marginBottom: 16 }}
-            message={`有 ${overdue.count} 条商家入驻申请已超过3个工作日未处理，请尽快审核！`}
+            message={`有 ${overdue.count} 条入驻申请超过3个工作日未处理`}
+            description={
+              <span>
+                {overdue.list?.map((item: any, i: number) => (
+                  <span key={item.id}>
+                    {i > 0 && '、'}
+                    「{item.shopName}」（已超{item.daysOverdue}天）
+                  </span>
+                ))}
+                ，请尽快审核。
+              </span>
+            }
           />
         )}
 

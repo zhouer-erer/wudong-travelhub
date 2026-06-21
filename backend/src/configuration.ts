@@ -7,6 +7,7 @@ import * as koa from '@midwayjs/koa';
 import * as typeorm from '@midwayjs/typeorm';
 import * as jwt from '@midwayjs/jwt';
 import * as validate from '@midwayjs/validate';
+import * as cron from '@midwayjs/cron';
 import { join } from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -20,6 +21,7 @@ const multer = require('multer');
     typeorm,
     jwt,
     validate,
+    cron,
   ],
   importConfigs: [join(__dirname, 'config')],
   conflictCheck: false,

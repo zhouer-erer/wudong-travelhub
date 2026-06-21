@@ -44,6 +44,9 @@ export class RecommendationController {
    */
   @Post('/create')
   async create(@Body() body: any) {
+    // 兜底：数据库字段 NOT NULL 无默认值，前端不传时补默认值
+    if (!body.content_type) body.content_type = '';
+    if (body.content_id == null) body.content_id = 0;
     const item = await this.recommendationService.create(body);
     return { code: 200, message: 'success', data: item };
   }

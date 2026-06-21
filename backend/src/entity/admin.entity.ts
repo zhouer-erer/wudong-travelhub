@@ -35,6 +35,12 @@ export class Admin {
   @Column({ type: 'datetime', nullable: true, comment: '最后登录时间' })
   last_login_at: Date;
 
+  @Column({ type: 'varchar', length: 50, nullable: true, comment: '最后登录IP' })
+  last_login_ip: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true, comment: '最后登录地点' })
+  last_login_location: string;
+
   @Column({ type: 'int', default: 0, comment: '连续登录失败次数' })
   login_fail_count: number;
 

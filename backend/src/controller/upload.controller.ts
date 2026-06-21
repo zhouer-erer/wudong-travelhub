@@ -33,8 +33,8 @@ export class UploadController {
     const file = files[0];
     const fileBuffer = file.buffer;   // memoryStorage 直接提供 buffer，无需读磁盘
 
-    // 开发环境(NODE_ENV=local)跳过 OSS，直接存本地，速度更快
-    if (process.env.NODE_ENV !== 'local' && this.ossService.isConfigured()) {
+    // OSS 已配置则优先上传到 OSS
+    if (this.ossService.isConfigured()) {
       try {
         // 上传到 OSS
         const result = await this.ossService.uploadFile(
@@ -101,8 +101,8 @@ export class UploadController {
     for (const file of files) {
       const fileBuffer = file.buffer;   // memoryStorage
 
-      // 开发环境跳过 OSS，直接本地存储
-      if (process.env.NODE_ENV !== 'local' && this.ossService.isConfigured()) {
+      // OSS 已配置则优先上传到 OSS
+      if (this.ossService.isConfigured()) {
         try {
           const result = await this.ossService.uploadFile(
             fileBuffer,
@@ -234,6 +234,53 @@ export class UploadController {
         message: `删除失败: ${error.message}`,
         data: null,
       };
+    }
+  }
+
+  /**
+   * OSS 内容审核回调接口
+   * POST /api/upload/moderation-callback
+   * 当 OSS 配置了图片审核事件通知后，审核结果会回调此接口
+   * 审核不通过时自动删除违规图片
+   *
+   * 回调数据格式参考阿里云文档：
+   * https://help.aliyun.com/document_detail/458915.html
+   */
+  @Post('/moderation-callback')
+  async moderationCallback(@Body() body: any) {
+    try {
+      const { events } = body;
+
+      if (!events || !Array.isArray(events)) {
+        return { code: 400, message: '无效的回调数据', data: null };
+      }
+
+      for (const event of events) {
+        const { object, eventName, result } = event;
+        const objectKey = object?.key;
+        const moderationResult = result?.label; // block / review / pass
+
+        console.log(`[内容审核] 文件: ${objectKey}, 事件: ${eventName}, 结果: ${moderationResult}`);
+
+        // 审核不通过（block），自动删除违规文件
+        if (moderationResult === 'block' && objectKey) {
+          console.log(`[内容审核] 违规内容，自动删除: ${objectKey}`);
+
+          if (this.ossService.isConfigured()) {
+            try {
+              await this.ossService.deleteFile(objectKey);
+              console.log(`[内容审核] 已删除违规文件: ${objectKey}`);
+            } catch (err) {
+              console.error(`[内容审核] 删除文件失败: ${objectKey}`, err);
+            }
+          }
+        }
+      }
+
+      return { code: 200, message: 'success', data: null };
+    } catch (error) {
+      console.error('[内容审核] 回调处理失败:', error);
+      return { code: 500, message: '回调处理失败', data: null };
     }
   }
 }

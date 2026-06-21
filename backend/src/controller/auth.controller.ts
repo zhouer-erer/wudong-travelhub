@@ -1,7 +1,10 @@
 import { Controller, Post, Inject, Body, Get, Headers } from '@midwayjs/decorator';
 import { AdminService } from '../service/admin.service';
 import { PermissionService } from '../service/permission.service';
+import { SystemMessageService } from '../service/system-message.service';
+import { IpLocationService } from '../service/ip-location.service';
 import { JwtService } from '@midwayjs/jwt';
+import { Context } from '@midwayjs/koa';
 
 /**
  * 内存中的短信验证码存储
@@ -34,6 +37,15 @@ export class AuthController {
 
   @Inject()
   jwtService: JwtService;
+
+  @Inject()
+  systemMessageService: SystemMessageService;
+
+  @Inject()
+  ipLocationService: IpLocationService;
+
+  @Inject()
+  ctx: Context;
 
   /**
    * 管理员登录（第一步：验证账号密码）
@@ -180,11 +192,36 @@ export class AuthController {
       role_id: admin.role_id,
     });
 
-    // 登录成功 → 清除锁定状态 + 更新最后登录时间
+    // 获取客户端 IP
+    const forwarded = this.ctx.headers['x-forwarded-for'];
+    const clientIp = (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim())
+      || (Array.isArray(this.ctx.headers['x-real-ip']) ? this.ctx.headers['x-real-ip'][0] : this.ctx.headers['x-real-ip'])
+      || this.ctx.ip
+      || '127.0.0.1';
+
+    // 查询登录地点
+    const location = await this.ipLocationService.getLocation(clientIp);
+
+    // 异地登录检测：上次有记录且地点不同 → 发送系统消息提醒
+    if (admin.last_login_location && location && admin.last_login_location !== location) {
+      console.log(`[安全] 管理员 ${admin.username} 异地登录: ${admin.last_login_location} → ${location} (IP: ${clientIp})`);
+
+      await this.systemMessageService.create({
+        user_id: admin.id,
+        message_type: 'system',
+        title: '异地登录提醒',
+        content: `您的账号于 ${new Date().toLocaleString('zh-CN')} 在 ${location}（IP: ${clientIp}）登录，上次登录地点为 ${admin.last_login_location}。如非本人操作，请立即修改密码。`,
+        is_read: 0,
+      });
+    }
+
+    // 登录成功 → 清除锁定状态 + 更新登录信息
     await this.adminService.update(admin.id, {
       login_fail_count: 0,
       locked_until: null as any,
       last_login_at: new Date(),
+      last_login_ip: clientIp,
+      last_login_location: location || admin.last_login_location || '',
     });
 
     return {

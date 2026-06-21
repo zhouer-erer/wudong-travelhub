@@ -1,6 +1,9 @@
 import { Controller, Post, Put, Inject, Body, Get, Headers } from '@midwayjs/decorator';
 import { MerchantService } from '../service/merchant.service';
+import { SystemMessageService } from '../service/system-message.service';
+import { IpLocationService } from '../service/ip-location.service';
 import { JwtService } from '@midwayjs/jwt';
+import { Context } from '@midwayjs/koa';
 
 /**
  * 商家认证控制器
@@ -13,6 +16,15 @@ export class MerchantAuthController {
 
   @Inject()
   jwtService: JwtService;
+
+  @Inject()
+  systemMessageService: SystemMessageService;
+
+  @Inject()
+  ipLocationService: IpLocationService;
+
+  @Inject()
+  ctx: Context;
 
   /**
    * 商家登录
@@ -65,8 +77,34 @@ export class MerchantAuthController {
       username: merchant.username,
       role: 'merchant'
     });
+
+    // 获取客户端 IP
+    const forwarded = this.ctx.headers['x-forwarded-for'];
+    const clientIp = (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim())
+      || (Array.isArray(this.ctx.headers['x-real-ip']) ? this.ctx.headers['x-real-ip'][0] : this.ctx.headers['x-real-ip'])
+      || this.ctx.ip
+      || '127.0.0.1';
+
+    // 查询登录地点
+    const location = await this.ipLocationService.getLocation(clientIp);
+
+    // 异地登录检测：上次有记录且地点不同 → 发送系统消息提醒
+    if (merchant.last_login_location && location && merchant.last_login_location !== location) {
+      console.log(`[安全] 商家 ${merchant.username} 异地登录: ${merchant.last_login_location} → ${location} (IP: ${clientIp})`);
+
+      await this.systemMessageService.create({
+        user_id: null as any, // 管理员可见
+        message_type: 'system',
+        title: '商家异地登录提醒',
+        content: `商家「${merchant.shop_name}」（${merchant.username}）于 ${new Date().toLocaleString('zh-CN')} 在 ${location}（IP: ${clientIp}）登录，上次登录地点为 ${merchant.last_login_location}。请关注账号安全。`,
+        is_read: 0,
+      });
+    }
+
     await this.merchantService.update(merchant.id, {
       last_login_at: new Date(),
+      last_login_ip: clientIp,
+      last_login_location: location || merchant.last_login_location || '',
       login_fail_count: 0,
       locked_until: null,
     });

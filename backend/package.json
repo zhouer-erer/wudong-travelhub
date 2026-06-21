@@ -13,6 +13,7 @@
   "dependencies": {
     "@midwayjs/bootstrap": "^3.0.0",
     "@midwayjs/core": "^3.0.0",
+    "@midwayjs/cron": "^3.20.24",
     "@midwayjs/decorator": "^3.20.24",
     "@midwayjs/jwt": "^3.0.0",
     "@midwayjs/koa": "^3.0.0",
@@ -30,6 +31,7 @@
     "koa-static": "^5.0.0",
     "multer": "^2.2.0",
     "mysql2": "^3.0.0",
+    "sharp": "^0.35.2",
     "typeorm": "^0.3.30"
   },
   "devDependencies": {
