@@ -1,8 +1,9 @@
-import { Provide } from '@midwayjs/decorator';
+import { Provide, Inject } from '@midwayjs/decorator';
 import { InjectEntityModel } from '@midwayjs/typeorm';
 import { Repository } from 'typeorm';
 import { Permission } from '../entity/permission.entity';
 import { RolePermission } from '../entity/role-permission.entity';
+import { RedisService } from './redis.service';
 
 /**
  * 权限服务
@@ -15,6 +16,9 @@ export class PermissionService {
 
   @InjectEntityModel(RolePermission)
   rolePermissionRepo: Repository<RolePermission>;
+
+  @Inject()
+  redisService: RedisService;
 
   /**
    * 分页查询权限列表
@@ -134,13 +138,30 @@ export class PermissionService {
   async setRolePermissions(roleId: number, permissionIds: number[]) {
     await this.rolePermissionRepo.delete({ role_id: roleId });
     if (permissionIds.length === 0) {
+      // 清除 RBAC 缓存
+      await this.invalidatePermissionCache(roleId);
       return { affected: 0 };
     }
     const entities = permissionIds.map(pid =>
       this.rolePermissionRepo.create({ role_id: roleId, permission_id: pid })
     );
     const result = await this.rolePermissionRepo.save(entities);
+    // 清除 RBAC 缓存
+    await this.invalidatePermissionCache(roleId);
     return { affected: result.length };
+  }
+
+  /**
+   * 清除角色权限的 Redis 缓存
+   * 当角色权限变更时调用，确保下次请求从 DB 获取最新权限
+   * @param roleId 角色 ID
+   */
+  private async invalidatePermissionCache(roleId: number): Promise<void> {
+    try {
+      await this.redisService.del(`rbac:permissions:${roleId}`);
+    } catch {
+      // Redis 异常不影响主业务
+    }
   }
 
   /**

@@ -1,6 +1,12 @@
 /**
  * HTTP 请求工具模块
  * 基于 axios 封装统一的请求实例，自动注入 token、处理 401 登录过期、格式化日期
+ *
+ * 安全特性：
+ * - XSS 防护：请求体中自动转义 HTML 标签
+ * - Token 自动注入：根据路由自动选择 admin / merchant token
+ * - 401 统一处理：自动跳转登录页
+ * - 日期格式化：自动将 ISO 日期转为本地格式
  */
 import axios from 'axios';
 import { message } from 'antd';
@@ -12,9 +18,41 @@ const request = axios.create({
 });
 
 /**
+ * XSS 转义：将字符串中的 HTML 特殊字符转义
+ * 防止存储型 XSS 攻击（用户输入内容存入数据库后再渲染到页面）
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+/**
+ * 递归遍历请求体，对所有字符串值进行 XSS 转义
+ * 排除密码、token 等不应被转义的字段
+ */
+const XSS_SKIP_KEYS = new Set(['password', 'token', 'smsToken', 'code', 'captcha']);
+function sanitizeRequestData(data: any): any {
+  if (data === null || data === undefined) return data;
+  if (typeof data === 'string') return escapeHtml(data);
+  if (Array.isArray(data)) return data.map(sanitizeRequestData);
+  if (typeof data === 'object') {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      result[key] = XSS_SKIP_KEYS.has(key) ? value : sanitizeRequestData(value);
+    }
+    return result;
+  }
+  return data;
+}
+
+/**
  * 请求拦截器
- * 根据当前路径判断使用管理员 token 还是商家 token
- * 确保商家无法访问管理员接口，反之亦然
+ * - 根据当前路径自动注入对应 token（admin / merchant）
+ * - 对 POST/PUT 请求体进行 XSS 转义
  */
 request.interceptors.request.use((config) => {
   const isMerchant = window.location.pathname.startsWith('/merchant-portal');
@@ -23,6 +61,15 @@ request.interceptors.request.use((config) => {
     : localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // 对写请求的 body 进行 XSS 转义（不转义 FormData / 文件上传）
+  if (
+    config.data &&
+    typeof config.data === 'object' &&
+    !(config.data instanceof FormData) &&
+    ['post', 'put'].includes((config.method || '').toLowerCase())
+  ) {
+    config.data = sanitizeRequestData(config.data);
   }
   return config;
 });

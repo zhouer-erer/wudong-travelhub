@@ -13,6 +13,8 @@ import { join } from 'path';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const koaStatic = require('koa-static');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
+const koaCompress = require('koa-compress');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const multer = require('multer');
 
 @Configuration({
@@ -31,6 +33,13 @@ export class ContainerLifeCycle {
   app: koa.Application;
 
   async onReady() {
+    // 配置 gzip 响应压缩（减少网络传输数据量，提升接口响应速度）
+    this.app.use(koaCompress({
+      threshold: 1024,  // 仅对大于 1KB 的响应进行压缩
+      gzip: { level: 6 },
+      br: false,        // 不启用 Brotli（兼容性考虑）
+    }));
+
     // 配置静态文件服务（上传文件访问）
     const uploadsDir = join(process.cwd(), 'uploads');
     const fs = require('fs');
@@ -168,6 +177,143 @@ export class ContainerLifeCycle {
           ctx.body = { code: 401, message: 'token无效或已过期', data: null };
           return;
         }
+      }
+
+      await next();
+    });
+
+    // ============================================================
+    // RBAC 权限校验中间件（在认证中间件之后、操作日志中间件之前）
+    // ============================================================
+
+    /**
+     * 路由前缀 → 所需权限码 映射表
+     * 匹配规则：最长前缀匹配，路由不在映射表中的默认放行（fail-open）
+     */
+    const ROUTE_PERMISSION_MAP: Record<string, string> = {
+      '/api/admin': 'admin:list',
+      '/api/roles': 'admin:role',
+      '/api/permissions': 'admin:role',
+      '/api/users': 'user:list',
+      '/api/merchant-applications': 'merchant:application',
+      '/api/merchants': 'merchant:list',
+      '/api/announcements': 'content:announcement',
+      '/api/carousels': 'content:carousel',
+      '/api/activity-banners': 'content:banner',
+      '/api/recommendations': 'content:recommendation',
+      '/api/orders': 'order:list',
+      '/api/financial-records': 'finance:list',
+      '/api/system-messages': 'message:list',
+      '/api/message-templates': 'message:template',
+      '/api/system-configs': 'system:config',
+      '/api/sensitive-words': 'system:sensitive',
+      '/api/operation-logs': 'system:log',
+      '/api/dashboard': 'dashboard',
+    };
+
+    /** 不需要权限校验的路由前缀（白名单） */
+    const RBAC_SKIP_PREFIXES = [
+      '/api/auth',
+      '/api/merchant-auth',
+      '/api/merchant-dashboard',
+      '/api/upload',
+      '/api/test',
+    ];
+
+    /** 商家可访问的路由前缀白名单 */
+    const MERCHANT_ALLOWED_PREFIXES = [
+      '/api/merchant-auth',
+      '/api/merchant-dashboard',
+      '/api/upload',
+    ];
+
+    this.app.use(async (ctx: any, next: any) => {
+      // 仅对 /api/ 路由生效
+      if (!ctx.path.startsWith('/api/')) {
+        await next();
+        return;
+      }
+
+      // 白名单路由直接跳过
+      if (RBAC_SKIP_PREFIXES.some(prefix => ctx.path.startsWith(prefix))) {
+        await next();
+        return;
+      }
+
+      // 商家请求：仅允许访问商家相关接口，禁止访问管理后台接口
+      if (ctx.state.merchant && !ctx.state.admin) {
+        const isMerchantAllowed = MERCHANT_ALLOWED_PREFIXES.some(prefix => ctx.path.startsWith(prefix));
+        if (!isMerchantAllowed) {
+          ctx.status = 403;
+          ctx.body = {
+            code: 403,
+            message: '商家账号无权访问此接口',
+            data: null,
+          };
+          return;
+        }
+        await next();
+        return;
+      }
+
+      // 非管理员请求跳过（既不是管理员也不是商家，理论上不应到达此处）
+      if (!ctx.state.admin) {
+        await next();
+        return;
+      }
+
+      // 最长前缀匹配查找所需权限码
+      let bestMatch = '';
+      let requiredPermission = '';
+      for (const [prefix, permission] of Object.entries(ROUTE_PERMISSION_MAP)) {
+        if (ctx.path.startsWith(prefix) && prefix.length > bestMatch.length) {
+          bestMatch = prefix;
+          requiredPermission = permission;
+        }
+      }
+
+      // 路由不在映射表中，放行（fail-open）
+      if (!requiredPermission) {
+        await next();
+        return;
+      }
+
+      const roleId = ctx.state.admin.role_id;
+      const cacheKey = `rbac:permissions:${roleId}`;
+
+      try {
+        // 从 Redis 缓存获取角色权限码列表
+        let permissionCodes: string[] = [];
+        try {
+          const redisService = await ctx.requestContext.getAsync('redisService');
+          const cached = await redisService.get(cacheKey);
+          if (cached) {
+            permissionCodes = JSON.parse(cached);
+          } else {
+            const permissionService = await ctx.requestContext.getAsync('permissionService');
+            const permissions = await permissionService.findByRoleId(roleId);
+            permissionCodes = permissions.map((p: any) => p.code);
+            await redisService.set(cacheKey, JSON.stringify(permissionCodes), 'EX', 300);
+          }
+        } catch {
+          // Redis 不可用时降级为直接查 DB
+          const permissionService = await ctx.requestContext.getAsync('permissionService');
+          const permissions = await permissionService.findByRoleId(roleId);
+          permissionCodes = permissions.map((p: any) => p.code);
+        }
+
+        if (!permissionCodes.includes(requiredPermission)) {
+          ctx.status = 403;
+          ctx.body = {
+            code: 403,
+            message: '权限不足，无法执行此操作',
+            data: null,
+          };
+          return;
+        }
+      } catch (error) {
+        // 权限查询异常：记录日志，但不阻断请求（避免因DB故障导致全部接口不可用）
+        console.error('[RBAC] 权限查询异常，放行请求:', error.message);
       }
 
       await next();
