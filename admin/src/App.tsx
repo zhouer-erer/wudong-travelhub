@@ -35,6 +35,7 @@ import MerchantDashboard from './pages/merchant-portal/MerchantDashboard';
 import ShopInfo from './pages/merchant-portal/ShopInfo';
 import AccountSettings from './pages/merchant-portal/AccountSettings';
 import MerchantMessages from './pages/merchant-portal/MerchantMessages';
+import MerchantStatistics from './pages/merchant-portal/MerchantStatistics';
 
 /**
  * 解析 JWT token 并检查是否过期
@@ -138,6 +139,7 @@ export default function App() {
         <Route index element={<Navigate to="/merchant-portal/dashboard" replace />} />
         <Route path="dashboard" element={<MerchantDashboard />} />
         <Route path="shop" element={<ShopInfo />} />
+        <Route path="statistics" element={<MerchantStatistics />} />
         <Route path="messages" element={<MerchantMessages />} />
         <Route path="settings" element={<AccountSettings />} />
       </Route>

@@ -16,6 +16,7 @@ import {
   MenuUnfoldOutlined,
   UserOutlined,
   BellOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -23,6 +24,7 @@ const { Header, Sider, Content } = Layout;
 const menuItems = [
   { key: '/merchant-portal/dashboard', icon: <DashboardOutlined />, label: '工作台' },
   { key: '/merchant-portal/shop', icon: <ShopOutlined />, label: '店铺信息' },
+  { key: '/merchant-portal/statistics', icon: <BarChartOutlined />, label: '数据统计' },
   { key: '/merchant-portal/messages', icon: <BellOutlined />, label: '消息通知' },
   { key: '/merchant-portal/settings', icon: <SettingOutlined />, label: '账号设置' },
 ];

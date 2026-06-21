@@ -172,6 +172,24 @@ export class ContainerLifeCycle {
     });
 
     // 操作日志中间件
+    // 操作类型中文映射
+    const ACTION_MAP: Record<string, string> = {
+      create: '新增', update: '编辑', delete: '删除',
+      approve: '审核通过', reject: '审核驳回',
+      ban: '封禁', unban: '解封',
+      'force-offline': '强制下线',
+      'refund-approve': '退款通过', 'refund-reject': '退款驳回',
+      close: '关闭', read: '标记已读',
+    };
+    // 业务对象中文映射
+    const TARGET_MAP: Record<string, string> = {
+      merchants: '商家', users: '用户', orders: '订单',
+      'merchant-applications': '入驻申请', announcements: '公告',
+      carousels: '轮播图', banners: '广告图', recommendations: '推荐内容',
+      admins: '管理员账号', roles: '角色', 'system-configs': '系统设置',
+      'sensitive-words': '敏感词', 'message-templates': '消息模板',
+    };
+
     this.app.use(async (ctx: any, next: any) => {
       const startTime = Date.now();
       const method = ctx.method.toUpperCase();
@@ -187,19 +205,31 @@ export class ContainerLifeCycle {
             if (admin) {
               const operationLogService = await ctx.requestContext.getAsync('operationLogService');
 
-              // 根据路径和方法推断操作类型
+              // 推断操作类型
               let action = 'other';
               if (method === 'DELETE') action = 'delete';
+              else if (ctx.path.includes('/refund-approve')) action = 'refund-approve';
+              else if (ctx.path.includes('/refund-reject')) action = 'refund-reject';
+              else if (ctx.path.includes('/force-offline')) action = 'force-offline';
               else if (ctx.path.includes('/approve')) action = 'approve';
               else if (ctx.path.includes('/reject')) action = 'reject';
               else if (ctx.path.includes('/ban')) action = 'ban';
               else if (ctx.path.includes('/unban')) action = 'unban';
+              else if (ctx.path.includes('/close')) action = 'close';
+              else if (ctx.path.includes('/read')) action = 'read';
               else if (method === 'POST') action = 'create';
               else if (method === 'PUT') action = 'update';
+
+              const actionLabel = ACTION_MAP[action] || action;
 
               // 获取操作对象
               const segments = ctx.path.split('/').filter(Boolean);
               const target = segments.length >= 2 ? segments[1] : ctx.path;
+              const targetName = TARGET_MAP[target] || target;
+
+              // 提取ID
+              const idMatch = ctx.path.match(/\/(\d+)(?:\/|$)/);
+              const id = idMatch ? idMatch[1] : null;
 
               // 获取请求体（排除敏感信息）
               const body = ctx.request.body ? JSON.parse(JSON.stringify(ctx.request.body)) : {};
@@ -207,20 +237,51 @@ export class ContainerLifeCycle {
               delete body.password_hash;
               delete body.token;
 
+              // 生成友好的操作内容
+              let content = '';
+              if (ctx.path.includes('/refund-approve')) {
+                content = `同意订单（ID: ${id}）的退款申请`;
+              } else if (ctx.path.includes('/refund-reject')) {
+                content = `拒绝订单（ID: ${id}）的退款申请，原因：${body.reason || '未说明'}`;
+              } else if (ctx.path.includes('/force-offline')) {
+                content = `强制商家（ID: ${id}）下线`;
+              } else if (ctx.path.includes('/approve')) {
+                content = `审核通过入驻申请（ID: ${id}），已自动创建商家账号`;
+              } else if (ctx.path.includes('/reject')) {
+                content = `驳回入驻申请（ID: ${id}），原因：${body.reject_reason || '未说明'}`;
+              } else if (ctx.path.includes('/ban')) {
+                content = `封禁${targetName}（ID: ${id}）`;
+              } else if (ctx.path.includes('/unban')) {
+                content = `解封${targetName}（ID: ${id}）`;
+              } else if (ctx.path.includes('/close')) {
+                content = `关闭订单（ID: ${id}）`;
+              } else if (ctx.path.includes('/read')) {
+                content = `标记消息（ID: ${id}）为已读`;
+              } else if (method === 'DELETE') {
+                content = `删除${targetName}（ID: ${id}）`;
+              } else if (method === 'POST') {
+                const name = body.shop_name || body.name || body.title || body.username || '';
+                content = `新增${targetName}`;
+                if (name) content += `：${name}`;
+              } else if (method === 'PUT') {
+                content = `编辑${targetName}（ID: ${id}）`;
+              } else {
+                content = `${actionLabel}${targetName}（ID: ${id}）`;
+              }
+
+              // 获取真实IP
+              const forwarded = ctx.headers['x-forwarded-for'];
+              const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim();
+              const clientIp = ip || ctx.headers['x-real-ip'] || ctx.ip || ctx.req.socket.remoteAddress || 'unknown';
+
               await operationLogService.create({
                 operator_id: admin.id,
                 operator_name: admin.name,
                 operator_type: 'admin',
-                action,
-                target,
-                content: JSON.stringify({
-                  method,
-                  path: ctx.path,
-                  body: Object.keys(body).length > 0 ? body : undefined,
-                  status: ctx.status,
-                  duration: Date.now() - startTime,
-                }).substring(0, 1000),
-                ip: ctx.ip || ctx.req.socket.remoteAddress,
+                action: actionLabel,
+                target: targetName,
+                content,
+                ip: clientIp,
                 user_agent: (ctx.headers['user-agent'] || '').substring(0, 500),
               });
             }

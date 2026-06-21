@@ -32,6 +32,9 @@ export class Merchant {
   @Column({ type: 'varchar', length: 20, comment: '联系电话' })
   contact_phone: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true, comment: '绑定手机号（登录验证/接收通知）' })
+  phone: string;
+
   @Column({ type: 'varchar', length: 500, nullable: true, comment: '店铺Logo' })
   logo: string;
 

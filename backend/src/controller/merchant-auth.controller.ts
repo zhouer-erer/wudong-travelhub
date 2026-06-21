@@ -75,7 +75,7 @@ export class MerchantAuthController {
       message: 'success',
       data: {
         token,
-        merchant: { id: merchant.id, username: merchant.username, shop_name: merchant.shop_name, module_type: merchant.module_type }
+        merchant: { id: merchant.id, username: merchant.username, shop_name: merchant.shop_name, module_type: merchant.module_type, phone: merchant.phone, contact_phone: merchant.contact_phone }
       }
     };
   }
@@ -103,6 +103,7 @@ export class MerchantAuthController {
           module_type: merchant.module_type,
           contact_name: merchant.contact_name,
           contact_phone: merchant.contact_phone,
+          phone: merchant.phone,
           logo: merchant.logo,
           description: merchant.description,
           address: merchant.address,
@@ -164,6 +165,70 @@ export class MerchantAuthController {
           description: item.description,
           address: item.address,
         }
+      };
+    } catch {
+      return { code: 401, message: 'token无效', data: null };
+    }
+  }
+
+  /**
+   * 发送手机验证码（演示模式）
+   * POST /api/merchant-auth/send-sms-code
+   * 演示模式：只需输入任意6位数字即可通过验证
+   */
+  @Post('/send-sms-code')
+  async sendSmsCode(@Body() body: { phone: string }) {
+    try {
+      // 验证手机号格式
+      if (!body.phone || !/^1[3-9]\d{9}$/.test(body.phone)) {
+        return { code: 400, message: '请输入正确的手机号', data: null };
+      }
+
+      // 演示模式：模拟发送成功，实际不会发送短信
+      console.log(`[演示模式] 验证码请求：${body.phone}，输入任意6位数字即可`);
+
+      return {
+        code: 200,
+        message: '验证码已发送（演示模式：输入任意6位数字即可）',
+        data: null,
+      };
+    } catch (err) {
+      return { code: 500, message: '发送验证码失败', data: null };
+    }
+  }
+
+  /**
+   * 绑定手机号（演示模式）
+   * PUT /api/merchant-auth/bind-phone
+   * 演示模式：输入任意6位数字即可通过验证
+   */
+  @Put('/bind-phone')
+  async bindPhone(
+    @Headers('authorization') auth: string,
+    @Body() body: { phone: string; code: string }
+  ) {
+    try {
+      const token = auth?.replace('Bearer ', '');
+      const payload: any = await this.jwtService.verify(token);
+      if (payload.role !== 'merchant') return { code: 403, message: '无权限', data: null };
+
+      // 验证手机号格式
+      if (!body.phone || !/^1[3-9]\d{9}$/.test(body.phone)) {
+        return { code: 400, message: '请输入正确的手机号', data: null };
+      }
+
+      // 演示模式：任意6位数字即可通过
+      if (!body.code || body.code.length !== 6 || !/^\d{6}$/.test(body.code)) {
+        return { code: 400, message: '请输入6位数字验证码', data: null };
+      }
+
+      // 验证通过，更新手机号
+      await this.merchantService.update(payload.id, { phone: body.phone });
+
+      return {
+        code: 200,
+        message: '手机号绑定成功',
+        data: null,
       };
     } catch {
       return { code: 401, message: 'token无效', data: null };

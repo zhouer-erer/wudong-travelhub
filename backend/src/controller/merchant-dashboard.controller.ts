@@ -180,4 +180,163 @@ export class MerchantDashboardController {
       return { code: 500, message: '操作失败', data: null };
     }
   }
+
+  /**
+   * 获取商家数据统计
+   * GET /api/merchant-dashboard/statistics
+   *
+   * 返回商家维度的销售/订单数据，支持时间范围筛选
+   */
+  @Get('/statistics')
+  async statistics(
+    @Headers('authorization') auth: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    const merchantId = await this.getMerchantId(auth);
+    if (!merchantId) {
+      return { code: 401, message: '未登录或token无效', data: null };
+    }
+
+    try {
+      // 构建时间范围条件
+      const qb = this.orderRepo.createQueryBuilder('o')
+        .where('o.merchant_id = :merchantId', { merchantId })
+        .andWhere('o.is_deleted = 0');
+
+      if (startDate) {
+        qb.andWhere('o.created_at >= :startDate', { startDate });
+      }
+      if (endDate) {
+        qb.andWhere('o.created_at <= :endDate', { endDate: endDate + ' 23:59:59' });
+      }
+
+      // 总销售额（已完成订单）
+      const totalSalesResult = await qb
+        .clone()
+        .select('SUM(o.total_amount)', 'total')
+        .andWhere('o.status = :status', { status: 'completed' })
+        .getRawOne();
+
+      // 总订单数
+      const totalOrders = await qb.clone().getCount();
+
+      // 客户数（去重）
+      const totalCustomersResult = await qb
+        .clone()
+        .select('COUNT(DISTINCT o.user_id)', 'count')
+        .getRawOne();
+
+      // 各状态订单数
+      const statusStats = await qb
+        .clone()
+        .select('o.status', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('o.status')
+        .getRawMany();
+
+      const statusMap: Record<string, number> = {};
+      statusStats.forEach(item => {
+        statusMap[item.status] = Number(item.count);
+      });
+
+      // 订单状态映射
+      const ORDER_STATUS_MAP: Record<string, string> = {
+        pending_payment: '待支付',
+        paid: '已支付',
+        shipped: '已发货',
+        completed: '已完成',
+        cancelled: '已取消',
+        closed: '已关闭',
+        refunding: '退款中',
+        refund_approved: '退款通过',
+        refund_rejected: '退款被拒',
+        refunded: '已退款',
+      };
+
+      // 状态分布（包含所有状态，包括未知状态）
+      const statusDistribution = statusStats.map(item => ({
+        status: item.status,
+        label: ORDER_STATUS_MAP[item.status] || item.status,
+        count: Number(item.count),
+      }));
+
+      // 销售趋势（按天）
+      const salesTrend = await qb
+        .clone()
+        .select("DATE_FORMAT(o.created_at, '%Y-%m-%d')", 'date')
+        .addSelect('SUM(o.total_amount)', 'amount')
+        .andWhere('o.status = :status', { status: 'completed' })
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .limit(30)
+        .getRawMany();
+
+      // 订单趋势（按天）
+      const orderTrend = await qb
+        .clone()
+        .select("DATE_FORMAT(o.created_at, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .limit(30)
+        .getRawMany();
+
+      // 按订单类型统计
+      const typeStats = await qb
+        .clone()
+        .select('o.order_type', 'type')
+        .addSelect('COUNT(*)', 'count')
+        .addSelect('SUM(o.total_amount)', 'amount')
+        .andWhere('o.status = :status', { status: 'completed' })
+        .groupBy('o.order_type')
+        .orderBy('amount', 'DESC')
+        .getRawMany();
+
+      // 订单类型映射
+      const ORDER_TYPE_MAP: Record<string, string> = {
+        product: '商品',
+        food_order: '餐饮',
+        stay: '住宿',
+        ticket: '门票',
+        route: '路线',
+      };
+
+      return {
+        code: 200,
+        message: 'success',
+        data: {
+          totalSales: Number(totalSalesResult?.total || 0),
+          totalOrders,
+          totalCustomers: Number(totalCustomersResult?.count || 0),
+          // 各状态订单统计（预设状态）
+          pendingPayment: statusMap['pending_payment'] || 0,
+          paid: statusMap['paid'] || 0,
+          shipped: statusMap['shipped'] || 0,
+          completed: statusMap['completed'] || 0,
+          cancelled: statusMap['cancelled'] || 0,
+          refunding: statusMap['refunding'] || 0,
+          // 所有状态分布（包含未知状态）
+          statusDistribution,
+          // 趋势数据
+          salesTrend: salesTrend.map(item => ({
+            date: item.date,
+            amount: Number(item.amount || 0),
+          })),
+          orderTrend: orderTrend.map(item => ({
+            date: item.date,
+            count: Number(item.count || 0),
+          })),
+          // 按订单类型统计
+          typeStats: typeStats.map(item => ({
+            type: ORDER_TYPE_MAP[item.type] || item.type,
+            count: Number(item.count || 0),
+            amount: Number(item.amount || 0),
+          })),
+        },
+      };
+    } catch (err) {
+      return { code: 500, message: '获取统计数据失败', data: null };
+    }
+  }
 }

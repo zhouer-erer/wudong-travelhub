@@ -154,12 +154,14 @@ export class MerchantApplicationController {
     try {
       const token = auth?.replace('Bearer ', '');
       const payload: any = await this.jwtService.verify(token);
+
       const item = await this.merchantApplicationService.update(Number(id), {
         status: 'rejected',
         reviewer_id: payload.id,
         reject_reason: body.reject_reason,
         review_time: new Date()
       });
+
       return { code: 200, message: '已驳回', data: item };
     } catch {
       return { code: 401, message: 'token无效', data: null };
