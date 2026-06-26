@@ -20,6 +20,7 @@ import { UserService } from '../service/user.service';
 import { MerchantService } from '../service/merchant.service';
 import { OrderService } from '../service/order.service';
 import { FinancialRecordService } from '../service/financial-record.service';
+import { RedisService } from '../service/redis.service';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()
@@ -39,6 +40,9 @@ export class DashboardController {
 
   @Inject()
   financialRecordService: FinancialRecordService;
+
+  @Inject()
+  redisService: RedisService;
 
   @InjectEntityModel(User)
   userRepo: Repository<User>;
@@ -139,6 +143,17 @@ export class DashboardController {
     },
   })
   async overview() {
+    const startTime = Date.now();
+    const cacheKey = 'dashboard:overview';
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        this.ctx.set('X-Cache', 'HIT');
+        this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+        return JSON.parse(cached);
+      }
+    } catch (e) { /* Redis 异常降级查 DB */ }
+
     try {
       const [userStats, orderStats, merchantStats, financialStats, orderTrend, moduleDistribution, moduleGMV, topMerchants, overdueApplications, conversionRates] = await Promise.all([
         this.getUserStats(),
@@ -153,7 +168,7 @@ export class DashboardController {
         this.getConversionRates(),
       ]);
 
-      return {
+      const response = {
         code: 200,
         message: 'success',
         data: {
@@ -169,6 +184,10 @@ export class DashboardController {
           conversionRates,
         },
       };
+      try { await this.redisService.set(cacheKey, JSON.stringify(response), 60); } catch (e) { /* ignore */ }
+      this.ctx.set('X-Cache', 'MISS');
+      this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+      return response;
     } catch (error) {
       return { code: 500, message: error.message, data: null };
     }

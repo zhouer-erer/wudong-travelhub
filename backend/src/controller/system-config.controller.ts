@@ -1,6 +1,8 @@
 import { Controller, Post, Get, Put, Inject, Body, Param } from '@midwayjs/decorator';
 import { ApiOperation, ApiBody, ApiTags, ApiResponse, ApiParam, ApiBearerAuth } from '@midwayjs/swagger';
+import { Context } from '@midwayjs/koa';
 import { SystemConfigService } from '../service/system-config.service';
+import { RedisService } from '../service/redis.service';
 
 /**
  * 系统配置控制器
@@ -11,7 +13,13 @@ import { SystemConfigService } from '../service/system-config.service';
 @Controller('/api/system-configs')
 export class SystemConfigController {
   @Inject()
+  ctx: Context;
+
+  @Inject()
   systemConfigService: SystemConfigService;
+
+  @Inject()
+  redisService: RedisService;
 
   /**
    * 获取所有系统配置列表
@@ -36,8 +44,23 @@ export class SystemConfigController {
     },
   })
   async list() {
+    const startTime = Date.now();
+    const cacheKey = 'system-config:list';
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        this.ctx.set('X-Cache', 'HIT');
+        this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+        return JSON.parse(cached);
+      }
+    } catch (e) { /* Redis 异常降级查 DB */ }
+
     const result = await this.systemConfigService.findAll();
-    return { code: 200, message: 'success', data: result };
+    const response = { code: 200, message: 'success', data: result };
+    try { await this.redisService.set(cacheKey, JSON.stringify(response), 600); } catch (e) { /* ignore */ }
+    this.ctx.set('X-Cache', 'MISS');
+    this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+    return response;
   }
 
   /**
@@ -61,9 +84,24 @@ export class SystemConfigController {
     },
   })
   async detail(@Param('key') key: string) {
+    const startTime = Date.now();
+    const cacheKey = `system-config:detail:${key}`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        this.ctx.set('X-Cache', 'HIT');
+        this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+        return JSON.parse(cached);
+      }
+    } catch (e) { /* Redis 异常降级查 DB */ }
+
     const item = await this.systemConfigService.findByKey(key);
     if (!item) return { code: 404, message: '配置不存在', data: null };
-    return { code: 200, message: 'success', data: item };
+    const response = { code: 200, message: 'success', data: item };
+    try { await this.redisService.set(cacheKey, JSON.stringify(response), 600); } catch (e) { /* ignore */ }
+    this.ctx.set('X-Cache', 'MISS');
+    this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+    return response;
   }
 
   /**
@@ -100,6 +138,7 @@ export class SystemConfigController {
   async update(@Param('key') key: string, @Body() body: { value: string }) {
     const item = await this.systemConfigService.updateByKey(key, body.value);
     if (!item) return { code: 404, message: '配置不存在', data: null };
+    await this.clearCache(key);
     return { code: 200, message: 'success', data: item };
   }
 
@@ -138,6 +177,15 @@ export class SystemConfigController {
   })
   async create(@Body() body: any) {
     const item = await this.systemConfigService.create(body);
+    await this.clearCache(body.key);
     return { code: 200, message: 'success', data: item };
+  }
+
+  /** 清除系统配置缓存 */
+  private async clearCache(key?: string) {
+    try {
+      await this.redisService.del('system-config:list');
+      if (key) await this.redisService.del(`system-config:detail:${key}`);
+    } catch (e) { /* ignore */ }
   }
 }

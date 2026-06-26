@@ -1,6 +1,8 @@
 import { Controller, Post, Get, Put, Del, Inject, Query, Body, Param } from '@midwayjs/decorator';
 import { ApiOperation, ApiBody, ApiQuery, ApiParam, ApiTags, ApiResponse, ApiBearerAuth } from '@midwayjs/swagger';
+import { Context } from '@midwayjs/koa';
 import { RecommendationService } from '../service/recommendation.service';
+import { RedisService } from '../service/redis.service';
 
 /**
  * 推荐位控制器
@@ -11,7 +13,13 @@ import { RecommendationService } from '../service/recommendation.service';
 @Controller('/api/recommendations')
 export class RecommendationController {
   @Inject()
+  ctx: Context;
+
+  @Inject()
   recommendationService: RecommendationService;
+
+  @Inject()
+  redisService: RedisService;
 
   /**
    * 获取推荐位列表（分页）
@@ -44,8 +52,23 @@ export class RecommendationController {
     },
   })
   async list(@Query('page') page = 1, @Query('pageSize') pageSize = 20) {
+    const startTime = Date.now();
+    const cacheKey = `list:recommendation:${page}:${pageSize}`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        this.ctx.set('X-Cache', 'HIT');
+        this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+        return JSON.parse(cached);
+      }
+    } catch (e) { /* Redis 异常降级查 DB */ }
+
     const result = await this.recommendationService.findAll(Number(page), Number(pageSize));
-    return { code: 200, message: 'success', data: result };
+    const response = { code: 200, message: 'success', data: result };
+    try { await this.redisService.set(cacheKey, JSON.stringify(response), 300); } catch (e) { /* ignore */ }
+    this.ctx.set('X-Cache', 'MISS');
+    this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+    return response;
   }
 
   /**
@@ -120,6 +143,7 @@ export class RecommendationController {
     if (!body.content_type) body.content_type = '';
     if (body.content_id == null) body.content_id = 0;
     const item = await this.recommendationService.create(body);
+    await this.clearListCache();
     return { code: 200, message: 'success', data: item };
   }
 
@@ -169,6 +193,7 @@ export class RecommendationController {
   async update(@Param('id') id: number, @Body() body: any) {
     delete body.id;
     const item = await this.recommendationService.update(Number(id), body);
+    await this.clearListCache();
     return { code: 200, message: 'success', data: item };
   }
 
@@ -194,6 +219,12 @@ export class RecommendationController {
   })
   async remove(@Param('id') id: number) {
     await this.recommendationService.delete(Number(id));
+    await this.clearListCache();
     return { code: 200, message: 'success', data: null };
+  }
+
+  /** 清除推荐位列表缓存 */
+  private async clearListCache() {
+    try { await this.redisService.del('list:recommendation:1:20'); } catch (e) { /* ignore */ }
   }
 }

@@ -1,6 +1,8 @@
 import { Controller, Post, Get, Put, Del, Inject, Query, Body, Param } from '@midwayjs/decorator';
 import { ApiOperation, ApiBody, ApiQuery, ApiParam, ApiTags, ApiResponse, ApiBearerAuth } from '@midwayjs/swagger';
+import { Context } from '@midwayjs/koa';
 import { ActivityBannerService } from '../service/activity-banner.service';
+import { RedisService } from '../service/redis.service';
 
 /**
  * 活动横幅控制器
@@ -11,7 +13,13 @@ import { ActivityBannerService } from '../service/activity-banner.service';
 @Controller('/api/activity-banners')
 export class ActivityBannerController {
   @Inject()
+  ctx: Context;
+
+  @Inject()
   activityBannerService: ActivityBannerService;
+
+  @Inject()
+  redisService: RedisService;
 
   /**
    * 获取活动横幅列表（分页）
@@ -53,8 +61,23 @@ export class ActivityBannerController {
     },
   })
   async list(@Query('page') page = 1, @Query('pageSize') pageSize = 20, @Query('keyword') keyword?: string) {
+    const startTime = Date.now();
+    const cacheKey = `list:activity-banner:${page}:${pageSize}:${keyword || ''}`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        this.ctx.set('X-Cache', 'HIT');
+        this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+        return JSON.parse(cached);
+      }
+    } catch (e) { /* Redis 异常降级查 DB */ }
+
     const result = await this.activityBannerService.findAll(Number(page), Number(pageSize), keyword);
-    return { code: 200, message: 'success', data: result };
+    const response = { code: 200, message: 'success', data: result };
+    try { await this.redisService.set(cacheKey, JSON.stringify(response), 300); } catch (e) { /* ignore */ }
+    this.ctx.set('X-Cache', 'MISS');
+    this.ctx.set('X-Response-Time', `${Date.now() - startTime}ms`);
+    return response;
   }
 
   /**
@@ -146,6 +169,7 @@ export class ActivityBannerController {
   })
   async create(@Body() body: any) {
     const item = await this.activityBannerService.create(body);
+    await this.clearListCache();
     return { code: 200, message: 'success', data: item };
   }
 
@@ -205,6 +229,7 @@ export class ActivityBannerController {
   async update(@Param('id') id: number, @Body() body: any) {
     delete body.id;
     const item = await this.activityBannerService.update(Number(id), body);
+    await this.clearListCache();
     return { code: 200, message: 'success', data: item };
   }
 
@@ -230,6 +255,12 @@ export class ActivityBannerController {
   })
   async remove(@Param('id') id: number) {
     await this.activityBannerService.delete(Number(id));
+    await this.clearListCache();
     return { code: 200, message: 'success', data: null };
+  }
+
+  /** 清除活动横幅列表缓存 */
+  private async clearListCache() {
+    try { await this.redisService.del('list:activity-banner:1:20:'); } catch (e) { /* ignore */ }
   }
 }
