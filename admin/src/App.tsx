@@ -4,12 +4,14 @@
  * 未登录用户会被重定向到对应登录页
  *
  * 性能优化：使用 React.lazy 实现路由级代码分割，首屏只加载当前路由所需的代码
+ * 权限控制：路由级权限校验，无权限显示 403 页面
  */
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Spin } from 'antd';
 import MainLayout from './layouts/MainLayout';
 import ErrorBoundary from './components/ErrorBoundary';
+import PermissionGuard from './components/PermissionGuard';
 
 // ── 路由级懒加载（代码分割） ──
 const LoginPage = lazy(() => import('./pages/Login'));
@@ -117,27 +119,27 @@ export default function App() {
             }
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="admin/list" element={<AdminListPage />} />
-            <Route path="role/list" element={<RoleListPage />} />
-            <Route path="user/list" element={<UserListPage />} />
-            <Route path="merchant/list" element={<MerchantListPage />} />
-            <Route path="merchant/application" element={<ApplicationListPage />} />
-            <Route path="content/announcement" element={<AnnouncementListPage />} />
-            <Route path="content/carousel" element={<CarouselListPage />} />
-            <Route path="content/banner" element={<BannerListPage />} />
-            <Route path="content/recommendation" element={<RecommendationListPage />} />
-            <Route path="order/list" element={<OrderListPage />} />
-            <Route path="order/refund" element={<RefundApprovalPage />} />
-            <Route path="order/abnormal" element={<AbnormalOrderPage />} />
-            <Route path="message/list" element={<MessageListPage />} />
-            <Route path="message/template" element={<TemplateListPage />} />
-            <Route path="finance/list" element={<SettlementListPage />} />
-            <Route path="finance/report" element={<FinancialReportPage />} />
-            <Route path="finance/reconciliation" element={<ReconciliationPage />} />
-            <Route path="system/config" element={<SystemConfigPage />} />
-            <Route path="system/sensitive" element={<SensitiveWordPage />} />
-            <Route path="system/log" element={<OperationLogPage />} />
+            <Route path="dashboard" element={<PermissionGuard routePath="/dashboard"><DashboardPage /></PermissionGuard>} />
+            <Route path="admin/list" element={<PermissionGuard routePath="/admin/list"><AdminListPage /></PermissionGuard>} />
+            <Route path="role/list" element={<PermissionGuard routePath="/role/list"><RoleListPage /></PermissionGuard>} />
+            <Route path="user/list" element={<PermissionGuard routePath="/user/list"><UserListPage /></PermissionGuard>} />
+            <Route path="merchant/list" element={<PermissionGuard routePath="/merchant/list"><MerchantListPage /></PermissionGuard>} />
+            <Route path="merchant/application" element={<PermissionGuard routePath="/merchant/application"><ApplicationListPage /></PermissionGuard>} />
+            <Route path="content/announcement" element={<PermissionGuard routePath="/content/announcement"><AnnouncementListPage /></PermissionGuard>} />
+            <Route path="content/carousel" element={<PermissionGuard routePath="/content/carousel"><CarouselListPage /></PermissionGuard>} />
+            <Route path="content/banner" element={<PermissionGuard routePath="/content/banner"><BannerListPage /></PermissionGuard>} />
+            <Route path="content/recommendation" element={<PermissionGuard routePath="/content/recommendation"><RecommendationListPage /></PermissionGuard>} />
+            <Route path="order/list" element={<PermissionGuard routePath="/order/list"><OrderListPage /></PermissionGuard>} />
+            <Route path="order/refund" element={<PermissionGuard routePath="/order/refund"><RefundApprovalPage /></PermissionGuard>} />
+            <Route path="order/abnormal" element={<PermissionGuard routePath="/order/abnormal"><AbnormalOrderPage /></PermissionGuard>} />
+            <Route path="message/list" element={<PermissionGuard routePath="/message/list"><MessageListPage /></PermissionGuard>} />
+            <Route path="message/template" element={<PermissionGuard routePath="/message/template"><TemplateListPage /></PermissionGuard>} />
+            <Route path="finance/list" element={<PermissionGuard routePath="/finance/list"><SettlementListPage /></PermissionGuard>} />
+            <Route path="finance/report" element={<PermissionGuard routePath="/finance/report"><FinancialReportPage /></PermissionGuard>} />
+            <Route path="finance/reconciliation" element={<PermissionGuard routePath="/finance/reconciliation"><ReconciliationPage /></PermissionGuard>} />
+            <Route path="system/config" element={<PermissionGuard routePath="/system/config"><SystemConfigPage /></PermissionGuard>} />
+            <Route path="system/sensitive" element={<PermissionGuard routePath="/system/sensitive"><SensitiveWordPage /></PermissionGuard>} />
+            <Route path="system/log" element={<PermissionGuard routePath="/system/log"><OperationLogPage /></PermissionGuard>} />
           </Route>
 
           {/* ========== 商家后台 ========== */}
