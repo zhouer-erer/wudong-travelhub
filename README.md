@@ -16,21 +16,127 @@
 
 ```
 wudong-group6/
-├── backend/              # Midway 后端（端口 3000）
-│   ├── sql/init.sql      # 建表语句
+├── backend/                  # Midway 后端（端口 3000）
+│   ├── sql/                 # SQL 脚本
+│   │   ├── init.sql         # 建表语句
+│   │   ├── wudong_admin.sql # 数据库初始化数据
+│   │   └── refund_sample_data.sql  # 退款示例数据
 │   └── src/
-│       ├── controller/   # 路由与入参校验
-│       ├── service/      # 业务逻辑
-│       ├── entity/       # TypeORM 实体
-│       └── config/       # 配置文件
-├── admin/                # React + Vite 管理后台（端口 5174）
-│   └── src/
-│       ├── pages/        # 页面组件
-│       ├── layouts/      # 布局组件
-│       ├── components/   # 公共组件
-│       ├── utils/        # 工具函数
-│       └── theme/        # 主题配置
-└── doc/                  # 需求文档
+│       ├── config/          # 配置文件
+│       │   ├── config.default.ts   # 默认配置
+│       │   ├── config.local.ts     # 本地配置
+│       │   └── oss.config.ts       # OSS 配置
+│       ├── controller/      # 路由与入参校验（22个）
+│       │   ├── auth.controller.ts          # 认证接口
+│       │   ├── admin.controller.ts         # 管理员管理
+│       │   ├── role.controller.ts          # 角色管理
+│       │   ├── permission.controller.ts    # 权限管理
+│       │   ├── user.controller.ts          # 用户管理
+│       │   ├── merchant.controller.ts      # 商家管理
+│       │   ├── merchant-application.controller.ts  # 入驻审核
+│       │   ├── order.controller.ts         # 订单管理
+│       │   ├── financial-record.controller.ts      # 财务管理
+│       │   ├── announcement.controller.ts  # 公告管理
+│       │   ├── carousel.controller.ts      # 轮播图管理
+│       │   ├── activity-banner.controller.ts       # 活动横幅
+│       │   ├── recommendation.controller.ts        # 推荐位管理
+│       │   ├── system-message.controller.ts        # 系统消息
+│       │   ├── message-template.controller.ts      # 消息模板
+│       │   ├── system-config.controller.ts        # 系统配置
+│       │   ├── sensitive-word.controller.ts       # 敏感词管理
+│       │   ├── operation-log.controller.ts        # 操作日志
+│       │   ├── dashboard.controller.ts            # 数据看板
+│       │   ├── merchant-dashboard.controller.ts   # 商家工作台
+│       │   ├── merchant-auth.controller.ts        # 商家认证
+│       │   └── upload.controller.ts               # 文件上传
+│       ├── service/         # 业务逻辑（19个）
+│       ├── entity/          # TypeORM 实体（18个）
+│       ├── dto/             # 数据传输对象
+│       │   └── common.dto.ts # 公共 DTO
+│       ├── middleware/      # 中间件
+│       │   ├── auth.middleware.ts          # 认证中间件
+│       │   ├── permission.middleware.ts    # 权限中间件
+│       │   └── operation-log.middleware.ts # 操作日志中间件
+│       ├── schedule/        # 定时任务
+│       │   └── overdue-check.schedule.ts   # 超时审核检查
+│       ├── configuration.ts # 应用配置
+│       └── index.ts         # 入口文件
+├── admin/                   # React + Vite 管理后台（端口 5174）
+│   ├── public/              # 静态资源
+│   ├── src/
+│   │   ├── components/      # 公共组件
+│   │   │   ├── Captcha.tsx          # 图形验证码
+│   │   │   ├── ImageUpload.tsx      # 图片上传
+│   │   │   ├── AvatarUpload.tsx     # 头像上传
+│   │   │   ├── LazyImage.tsx        # 懒加载图片
+│   │   │   ├── PermissionGuard.tsx  # 权限守卫
+│   │   │   └── ErrorBoundary.tsx    # 错误边界
+│   │   ├── layouts/         # 布局组件
+│   │   │   └── MainLayout.tsx       # 主布局
+│   │   ├── pages/           # 页面组件
+│   │   │   ├── Dashboard.tsx        # 数据看板
+│   │   │   ├── Login.tsx            # 登录页面
+│   │   │   ├── admin/               # 管理员管理
+│   │   │   │   ├── AdminList.tsx    # 管理员列表
+│   │   │   │   └── RoleList.tsx     # 角色列表
+│   │   │   ├── user/                # 用户管理
+│   │   │   │   └── UserList.tsx     # 用户列表
+│   │   │   ├── merchant/            # 商家管理
+│   │   │   │   ├── MerchantList.tsx     # 商家列表
+│   │   │   │   └── ApplicationList.ts   # 入驻审核
+│   │   │   ├── content/             # 内容管理
+│   │   │   │   ├── AnnouncementList.tsx  # 公告管理
+│   │   │   │   ├── CarouselList.tsx     # 轮播图管理
+│   │   │   │   ├── BannerList.tsx       # 活动横幅
+│   │   │   │   └── RecommendationList.ts # 推荐位管理
+│   │   │   ├── order/               # 订单管理
+│   │   │   │   ├── OrderList.tsx        # 订单列表
+│   │   │   │   ├── RefundApproval.tsx   # 退款审批
+│   │   │   │   └── AbnormalOrder.tsx    # 异常订单
+│   │   │   ├── finance/             # 财务管理
+│   │   │   │   ├── SettlementList.tsx   # 结算管理
+│   │   │   │   ├── FinancialReport.tsx  # 财务报表
+│   │   │   │   └── Reconciliation.tsx   # 对账管理
+│   │   │   ├── message/             # 消息管理
+│   │   │   │   ├── MessageList.tsx      # 系统消息
+│   │   │   │   └── TemplateList.tsx     # 消息模板
+│   │   │   ├── system/              # 系统管理
+│   │   │   │   ├── SystemConfig.tsx     # 系统配置
+│   │   │   │   ├── SensitiveWordList.tsx # 敏感词管理
+│   │   │   │   └── OperationLog.tsx     # 操作日志
+│   │   │   └── merchant-portal/     # 商家后台
+│   │   │       ├── MerchantLogin.tsx       # 商家登录
+│   │   │       ├── MerchantDashboard.tsx   # 商家工作台
+│   │   │       ├── MerchantStatistics.tsx  # 商家统计
+│   │   │       ├── ShopInfo.tsx            # 店铺信息
+│   │   │       ├── MerchantMessages.tsx    # 消息通知
+│   │   │       ├── AccountSettings.tsx     # 账号设置
+│   │   │       └── MerchantLayout.tsx      # 商家布局
+│   │   ├── styles/          # 样式文件
+│   │   │   └── variables.css        # CSS 变量
+│   │   ├── theme/           # 主题配置
+│   │   │   └── index.ts     # 主题入口
+│   │   ├── utils/           # 工具函数
+│   │   │   ├── request.ts       # 请求封装
+│   │   │   ├── format.ts        # 格式化工具
+│   │   │   ├── export.ts        # 导出工具
+│   │   │   ├── debounce.ts      # 防抖函数
+│   │   │   ├── ossImage.ts      # OSS 图片处理
+│   │   │   └── useSubmitLock.ts # 提交锁 Hook
+│   │   ├── App.tsx          # 应用组件
+│   │   ├── main.tsx         # 入口文件
+│   │   └── index.css        # 全局样式
+│   ├── index.html           # HTML 模板
+│   ├── vite.config.ts       # Vite 配置
+│   └── tsconfig.json        # TypeScript 配置
+├── doc/                     # 需求文档
+├── docs/                    # API 文档
+│   └── openapi.json         # OpenAPI 规范
+├── admin-flowchart.html     # 管理后台流程图
+├── admin-main-flowchart.html # 管理后台主流程图
+├── admin-sequence-diagram.html # 管理后台序列图
+├── CLAUDE.md                # Claude 配置
+└── README.md                # 项目说明文档
 ```
 
 ## 功能清单
