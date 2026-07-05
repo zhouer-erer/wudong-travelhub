@@ -9,7 +9,7 @@ export default {
         port: parseInt(process.env.DB_PORT || '3306', 10),
         database: process.env.DB_DATABASE || 'wudong_admin',
         username: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '123456',
+        password: process.env.DB_PASSWORD || 'zser',
         synchronize: false,
         logging: true,
       },

@@ -421,19 +421,3 @@ INSERT INTO `user` (`openid`, `username`, `phone`, `nickname`, `avatar`, `gender
 ('test_openid_001', 'user001', '13900001111', '苗寨游客', NULL, 1, '贵州凯里', 1),
 ('test_openid_002', 'user002', '13900002222', '旅行达人', NULL, 2, '上海', 1),
 ('test_openid_003', 'user003', '13900003333', '非遗爱好者', NULL, 1, '北京', 1);
-
--- ============================================================
--- 升级脚本：role 表新增 type 列（已有数据库执行）
--- ============================================================
-ALTER TABLE `role` ADD COLUMN `type` VARCHAR(20) NOT NULL DEFAULT 'custom' COMMENT '角色类型：system-系统内置 custom-自定义' AFTER `description`;
-
--- 将已有内置角色标记为 system
-UPDATE `role` SET `type` = 'system' WHERE `id` IN (1, 2, 3);
-
--- ============================================================
--- 升级脚本：merchant 表新增登录失败计数和锁定字段
--- ============================================================
-ALTER TABLE `merchant` ADD COLUMN `login_fail_count` INT NOT NULL DEFAULT 0 COMMENT '连续登录失败次数' AFTER `last_login_at`;
-ALTER TABLE `merchant` ADD COLUMN `locked_until` DATETIME DEFAULT NULL COMMENT '锁定截止时间' AFTER `login_fail_count`;
-
-ALTER TABLE merchant ADD COLUMN phone VARCHAR(20) DEFAULT NULL COMMENT '绑定手机号（登录验证/接收通知）' AFTER contact_phone;

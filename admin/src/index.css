@@ -14,6 +14,12 @@
   box-sizing: border-box;
 }
 
+/* 强制始终显示滚动条，宽度永远不变 → Dropdown 弹出不会导致抖动。
+ * 应用本身 height:100vh 填满视口，滚动条始终存在但不可滚动。 */
+html {
+  overflow-y: scroll;
+}
+
 body {
   font-family: var(--font-family-body);
   font-size: var(--text-body);
@@ -48,12 +54,17 @@ body {
 }
 
 /* ── 全局过渡动画基础 ── */
+/* 只过渡颜色/阴影类属性，避免 all 导致 Dropdown 弹出时布局属性动画冲突抖动 */
 a,
 button,
 .ant-btn,
 .ant-menu-item,
 .ant-card {
-  transition: all var(--duration-fast) var(--ease-standard);
+  transition: color var(--duration-fast) var(--ease-standard),
+              background-color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard);
 }
 
 /* ═══════════════════════════════════════

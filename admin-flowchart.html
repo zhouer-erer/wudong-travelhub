@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>超级管理员业务逻辑流程图</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      background: linear-gradient(135deg, #0A1929 0%, #112240 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+    .header p {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 10px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tab:hover {
+      border-color: #1890ff;
+      color: #1890ff;
+      background: rgba(24, 144, 255, 0.1);
+    }
+    .tab.active {
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      border-color: #1890ff;
+      color: #fff;
+    }
+    .diagram-container {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+      min-height: 500px;
+    }
+    .diagram-wrapper {
+      min-width: fit-content;
+    }
+    .legend {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+    }
+    .legend h3 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #888;
+    }
+    .legend-box {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    .legend-box.start { background: #52c41a; color: #fff; }
+    .legend-box.end { background: #1890ff; color: #fff; }
+    .legend-box.process { background: #f0f5ff; border: 1px solid #1890ff; }
+    .legend-box.decision { background: #fffbe6; border: 1px solid #faad14; transform: rotate(45deg); width: 20px; height: 20px; }
+    .legend-box.io { background: #f6ffed; border: 1px solid #52c41a; }
+    .legend-box.database { background: #fff2e8; border: 1px solid #ff7a45; }
+    .code-ref {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f6f8fa;
+      border-radius: 6px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      color: #586069;
+      overflow-x: auto;
+    }
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 20px;
+      }
+      .tab {
+        padding: 8px 16px;
+        font-size: 12px;
+      }
+      .diagram-container {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>乌东文旅平台 · 超级管理员业务逻辑流程图</h1>
+      <p>基于 Midway.js + TypeORM + JWT + Redis 技术栈</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showDiagram('login')">登录认证流程</div>
+      <div class="tab" onclick="showDiagram('permission')">权限管理流程</div>
+      <div class="tab" onclick="showDiagram('merchant')">商家管理流程</div>
+      <div class="tab" onclick="showDiagram('order')">订单处理流程</div>
+      <div class="tab" onclick="showDiagram('finance')">财务结算流程</div>
+    </div>
+
+    <div class="diagram-container">
+      <div id="login-diagram" class="diagram-wrapper">
+        <pre class="mermaid">
+flowchart TD
+    A[开始] --> B[用户输入账号密码]
+    B --> C{查询管理员信息}
+    C -->|用户名不存在| D[返回401错误]
+    D --> Z[结束]
+    C -->|用户名存在| E{检查账号状态}
+    E -->|账号已禁用| F[返回403错误]
+    F --> Z
+    E -->|账号被锁定| G[返回423锁定提示]
+    G --> Z
+    E -->|账号正常| H{验证密码}
+    H -->|密码错误| I{失败次数>=5?}
+    I -->|是| J[锁定账号30分钟]
+    J --> K[返回423锁定提示]
+    K --> Z
+    I -->|否| L[累计失败次数]
+    L --> M[返回401错误提示]
+    M --> Z
+    H -->|密码正确| N[清除锁定状态]
+    N --> O[生成6位验证码]
+    O --> P[生成UUID临时令牌]
+    P --> Q[存储到内存缓存]
+    Q --> R[返回手机号掩码和令牌]
+    R --> S[用户输入验证码]
+    S --> T{验证验证码}
+    T -->|无效/过期| U[返回401错误]
+    U --> Z
+    T -->|验证通过| V[生成JWT Token]
+    V --> W{检测异地登录}
+    W -->|是| X[发送系统消息提醒]
+    X --> Y[更新登录信息]
+    W -->|否| Y
+    Y --> AA[返回Token和用户信息]
+    AA --> Z[结束]
+
+    style A fill:#52c41a,color:#fff,font-weight:bold
+    style Z fill:#1890ff,color:#fff,font-weight:bold
+    style B fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style R fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style S fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style AA fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style C fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style E fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style H fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style I fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style T fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style W fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style D fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style F fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style G fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style K fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style M fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style U fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+        </pre>
+      </div>
+
+      <div id="permission-diagram" class="diagram-wrapper" style="display: none;">
+        <pre class="mermaid">
+flowchart TD
+    A[开始] --> B[用户发起API请求]
+    B --> C[携带JWT Token]
+    C --> D{验证Token}
+    D -->|无效/过期| E[返回401错误]
+    E --> Z[结束]
+    D -->|验证通过| F{解析用户角色}
+    F -->|商家角色| G{检查接口权限}
+    G -->|商家接口| H[设置商家上下文]
+    H --> I[放行请求]
+    G -->|管理后台接口| J[返回403错误]
+    J --> Z
+    F -->|管理员角色| K[查询管理员信息]
+    K --> L{检查账号状态}
+    L -->|账号禁用| M[返回401错误]
+    M --> Z
+    L -->|账号正常| N[设置管理员上下文]
+    N --> O{路由在白名单?}
+    O -->|是| I
+    O -->|否| P[匹配路由权限码]
+    P --> Q{路由在映射表?}
+    Q -->|否| I
+    Q -->|是| R{查询角色权限}
+    R -->|Redis缓存命中| S[获取权限列表]
+    R -->|Redis未命中| T[数据库查询权限]
+    T --> U[缓存权限到Redis]
+    U --> S
+    S --> V{权限校验通过?}
+    V -->|否| W[返回403错误]
+    W --> Z
+    V -->|是| I
+    I --> X[执行业务逻辑]
+    X --> Y[返回响应结果]
+    Y --> Z[结束]
+
+    style A fill:#52c41a,color:#fff,font-weight:bold
+    style Z fill:#1890ff,color:#fff,font-weight:bold
+    style B fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style Y fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style D fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style F fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style G fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style L fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style O fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style Q fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style R fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style V fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style E fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style J fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style M fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style W fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style T fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style U fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+        </pre>
+      </div>
+
+      <div id="merchant-diagram" class="diagram-wrapper" style="display: none;">
+        <pre class="mermaid">
+flowchart TD
+    A[开始] --> B[用户提交入驻申请]
+    B --> C[填写店铺信息]
+    C --> D[上传资质材料]
+    D --> E[选择所属模块]
+    E --> F[保存申请记录]
+    F --> G[状态设为待审核]
+    G --> H[管理员查看申请列表]
+    H --> I[选择申请进行审核]
+    I --> J{审核通过?}
+    J -->|否| K[填写驳回原因]
+    K --> L[状态设为已驳回]
+    L --> M[发送驳回通知]
+    M --> N[结束]
+    J -->|是| O[自动创建商家账号]
+    O --> P[生成初始密码]
+    P --> Q[状态设为已通过]
+    Q --> R[记录入驻时间]
+    R --> S[发送审核通过通知]
+    S --> T[商家登录后台]
+    T --> U[完善店铺信息]
+    U --> V[发布商品/服务]
+    V --> W[店铺运营中]
+    W --> X{违规处理}
+    X -->|是| Y[封禁店铺]
+    Y --> Z[状态设为禁用]
+    Z --> AA[发送封禁通知]
+    AA --> AB[结束]
+    X -->|否| AC[正常运营]
+    AC --> AB[结束]
+
+    style A fill:#52c41a,color:#fff,font-weight:bold
+    style AB fill:#1890ff,color:#fff,font-weight:bold
+    style B fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style D fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style T fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style V fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style J fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style X fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style F fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style Q fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style Z fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style M fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+    style AA fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+        </pre>
+      </div>
+
+      <div id="order-diagram" class="diagram-wrapper" style="display: none;">
+        <pre class="mermaid">
+flowchart TD
+    A[开始] --> B[用户下单]
+    B --> C[生成订单记录]
+    C --> D[状态设为待支付]
+    D --> E[用户完成支付]
+    E --> F[更新支付信息]
+    F --> G[状态设为已支付]
+    G --> H[创建财务记录]
+    H --> I[计算抽佣金额]
+    I --> J[商家发货/提供服务]
+    J --> K[状态设为已完成]
+    K --> L{用户申请退款?}
+    L -->|否| M[订单结束]
+    M --> Z[结束]
+    L -->|是| N[提交退款申请]
+    N --> O[管理员审核退款]
+    O --> P{退款审核通过?}
+    P -->|否| Q[填写拒绝原因]
+    Q --> R[通知用户拒绝退款]
+    R --> M
+    P -->|是| S[执行退款操作]
+    S --> T[更新订单状态]
+    T --> U[更新财务记录]
+    U --> V[通知用户退款成功]
+    V --> M
+
+    style A fill:#52c41a,color:#fff,font-weight:bold
+    style Z fill:#1890ff,color:#fff,font-weight:bold
+    style B fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style E fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style N fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style V fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style L fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style P fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style C fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style F fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style H fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style T fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style U fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style R fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+        </pre>
+      </div>
+
+      <div id="finance-diagram" class="diagram-wrapper" style="display: none;">
+        <pre class="mermaid">
+flowchart TD
+    A[开始] --> B[订单完成]
+    B --> C[生成财务记录]
+    C --> D[状态设为待结算]
+    D --> E[定时任务检查]
+    E --> F{达到结算周期?}
+    F -->|否| G[继续等待]
+    G --> E
+    F -->|是| H[计算商家应得金额]
+    H --> I[更新结算状态]
+    I --> J[状态设为已结算]
+    J --> K[记录结算时间]
+    K --> L[生成结算单]
+    L --> M[商家查看结算记录]
+    M --> N[申请提现]
+    N --> O[管理员审核提现]
+    O --> P{审核通过?}
+    P -->|否| Q[拒绝提现申请]
+    Q --> R[通知商家]
+    R --> Z[结束]
+    P -->|是| S[执行转账操作]
+    S --> T[更新提现状态]
+    T --> U[通知商家到账]
+    U --> V[生成财务报表]
+    V --> W[导出Excel]
+    W --> X[财务对账]
+    X --> Y[确认无误]
+    Y --> Z[结束]
+
+    style A fill:#52c41a,color:#fff,font-weight:bold
+    style Z fill:#1890ff,color:#fff,font-weight:bold
+    style B fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style N fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style W fill:#f6ffed,stroke:#52c41a,stroke-width:2px
+    style F fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style P fill:#fffbe6,stroke:#faad14,stroke-width:2px
+    style C fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style I fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style L fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style T fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style V fill:#fff2e8,stroke:#ff7a45,stroke-width:2px
+    style Q fill:#fff1f0,stroke:#ff4d4f,stroke-width:2px
+        </pre>
+      </div>
+
+      <div class="legend">
+        <h3>图例说明</h3>
+        <div class="legend-items">
+          <div class="legend-item">
+            <span class="legend-box start">●</span>
+            <span>开始节点</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box end">●</span>
+            <span>结束节点</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box process">□</span>
+            <span>处理步骤</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box decision"></span>
+            <span>判断节点</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box io">◇</span>
+            <span>输入/输出</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-box database">⊡</span>
+            <span>数据库操作</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-ref">
+        <strong>代码引用：</strong><br/>
+        登录控制器：backend/src/controller/auth.controller.ts<br/>
+        认证中间件：backend/src/configuration.ts<br/>
+        管理员服务：backend/src/service/admin.service.ts<br/>
+        商家服务：backend/src/service/merchant.service.ts<br/>
+        订单服务：backend/src/service/order.service.ts<br/>
+        财务服务：backend/src/service/financial-record.service.ts
+      </div>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1890ff',
+        primaryTextColor: '#333',
+        primaryBorderColor: '#1890ff',
+        lineColor: '#d9d9d9',
+        secondaryColor: '#52c41a',
+        tertiaryColor: '#ff4d4f',
+        backgroundColor: '#ffffff',
+        noteBackground: '#fffbe6',
+        noteBorder: '#ffe58f',
+      },
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis',
+      }
+    });
+
+    function showDiagram(type) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelector(`[onclick="showDiagram('${type}')"]`).classList.add('active');
+      
+      document.querySelectorAll('.diagram-wrapper').forEach(wrapper => {
+        wrapper.style.display = 'none';
+      });
+      document.getElementById(`${type}-diagram`).style.display = 'block';
+      
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+    }
+  </script>
+</body>
+</html>

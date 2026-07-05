@@ -49,7 +49,8 @@ const MerchantStatistics = lazy(() => import('./pages/merchant-portal/MerchantSt
 /** 路由级 loading 占位 */
 const PageLoading = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-    <Spin size="large" tip="加载中..." />
+    <Spin size="large" />
+    <span style={{ marginLeft: 12, fontSize: 14, color: '#999' }}>加载中...</span>
   </div>
 );
 

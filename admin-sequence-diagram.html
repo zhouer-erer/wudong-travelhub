@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>超级管理员业务逻辑顺序图</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      background: linear-gradient(135deg, #0A1929 0%, #112240 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+    .header p {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 10px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .tab:hover {
+      border-color: #1890ff;
+      color: #1890ff;
+      background: rgba(24, 144, 255, 0.1);
+    }
+    .tab.active {
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      border-color: #1890ff;
+      color: #fff;
+    }
+    .diagram-container {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+    }
+    .diagram-wrapper {
+      min-width: fit-content;
+    }
+    .legend {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+    }
+    .legend h3 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #888;
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .legend-dot.success { background: #52c41a; }
+    .legend-dot.error { background: #ff4d4f; }
+    .legend-dot.warning { background: #faad14; }
+    .legend-dot.info { background: #1890ff; }
+    .code-ref {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f6f8fa;
+      border-radius: 6px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      color: #586069;
+      overflow-x: auto;
+    }
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 20px;
+      }
+      .tab {
+        padding: 8px 16px;
+        font-size: 12px;
+      }
+      .diagram-container {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>乌东文旅平台 · 超级管理员业务逻辑顺序图</h1>
+      <p>基于 Midway.js + TypeORM + JWT + Redis 技术栈</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showDiagram('login')">登录流程（两步验证）</div>
+      <div class="tab" onclick="showDiagram('auth')">请求认证流程</div>
+      <div class="tab" onclick="showDiagram('rbac')">RBAC权限校验</div>
+    </div>
+
+    <div class="diagram-container">
+      <div id="login-diagram" class="diagram-wrapper">
+        <pre class="mermaid">
+sequenceDiagram
+    participant 前端 as 前端页面
+    participant Controller as AuthController
+    participant Service as AdminService
+    participant DB as MySQL
+    participant Cache as smsStore(内存)
+
+    前端->>Controller: POST /api/auth/login<br/>{username, password}
+    Controller->>Service: findByUsername(username)
+    Service->>DB: SELECT * FROM admin WHERE username=?
+    DB-->>Service: 返回admin记录
+    Service-->>Controller: 返回admin实体
+
+    alt 用户名不存在
+        Controller-->>前端: 401 用户名或密码错误
+    end
+
+    alt 账号已禁用
+        Controller-->>前端: 403 账号已被禁用
+    end
+
+    alt 账号被锁定
+        Controller-->>前端: 423 账号已被锁定，请X分钟后再试
+    end
+
+    Controller->>Controller: bcrypt.compare(password, hash)
+
+    alt 密码错误
+        Controller->>Service: update(login_fail_count++)
+        Service->>DB: UPDATE admin SET login_fail_count=?
+        Controller-->>前端: 401 用户名或密码错误，剩余X次机会
+        
+        alt 连续5次错误
+            Controller->>Service: update(locked_until=30分钟后)
+            Service->>DB: UPDATE admin SET locked_until=?
+            Controller-->>前端: 423 密码错误次数过多，账号已锁定30分钟
+        end
+    end
+
+    alt 密码正确
+        Controller->>Service: update(login_fail_count=0)
+        Service->>DB: UPDATE admin SET login_fail_count=0
+        Controller->>Controller: 生成6位验证码<br/>生成smsToken(UUID)
+        Controller->>Cache: set(smsToken, {code, adminId, expiresAt})
+        Controller-->>前端: 200 {needSms, phoneMask, smsToken}
+    end
+
+    前端->>Controller: POST /api/auth/verify-sms<br/>{smsToken, code}
+    Controller->>Cache: get(smsToken)
+
+    alt 验证码过期或无效
+        Cache-->>Controller: null/过期
+        Controller->>Cache: delete(smsToken)
+        Controller-->>前端: 401 验证码已过期，请重新登录
+    end
+
+    Cache-->>Controller: 返回存储数据
+    Controller->>Cache: delete(smsToken)
+    Controller->>Controller: JWT.sign({id, username, role_id})
+    Controller->>Service: findById(adminId)
+    Service->>DB: SELECT * FROM admin WHERE id=?
+    DB-->>Service: 返回admin记录
+    Service-->>Controller: 返回admin实体
+    
+    Controller->>Controller: 查询登录IP地点<br/>检测异地登录
+    alt 异地登录
+        Controller->>Controller: 发送系统消息提醒
+    end
+    
+    Controller->>Service: update(last_login_at, last_login_ip, ...)
+    Service->>DB: UPDATE admin SET last_login_*=?
+    Controller-->>前端: 200 {token, admin}
+        </pre>
+      </div>
+
+      <div id="auth-diagram" class="diagram-wrapper" style="display: none;">
+        <pre class="mermaid">
+sequenceDiagram
+    participant 前端 as 前端页面
+    participant Middleware as 认证中间件
+    participant JWT as JwtService
+    participant Service as AdminService
+    participant DB as MySQL
+
+    前端->>Middleware: HTTP请求 + Authorization: Bearer {token}
+    Middleware->>JWT: verify(token)
+    
+    alt Token无效或过期
+        JWT-->>Middleware: 抛出异常
+        Middleware-->>前端: 401 token无效或已过期
+    end
+
+    JWT-->>Middleware: 返回payload {id, username, role_id, role}
+    
+    alt 商家Token (role=merchant)
+        Middleware->>Middleware: 查询商家表验证
+        Middleware->>Middleware: 检查强制下线(Redis)
+        alt 商家账号禁用/强制下线
+            Middleware-->>前端: 401 商家账号已被禁用/强制下线
+        end
+        Middleware->>Middleware: ctx.state.merchant = {...}
+    else 管理员Token
+        Middleware->>Service: findById(id)
+        Service->>DB: SELECT * FROM admin WHERE id=?
+        DB-->>Service: 返回admin记录
+        Service-->>Middleware: 返回admin实体
+        
+        alt 管理员账号禁用
+            Middleware-->>前端: 401 账号已被禁用
+        end
+        
+        Middleware->>Middleware: ctx.state.admin = {...}
+    end
+    
+    Middleware->>Middleware: 继续执行下一个中间件
+    Note right of Middleware: RBAC权限校验 -> Controller -> Response
+        </pre>
+      </div>
+
+      <div id="rbac-diagram" class="diagram-wrapper" style="display: none;">
+        <pre class="mermaid">
+sequenceDiagram
+    participant Middleware as RBAC中间件
+    participant Redis as Redis缓存
+    participant PermissionService as PermissionService
+    participant DB as MySQL
+
+    Middleware->>Middleware: 检查白名单路由
+    
+    alt 在白名单中
+        Middleware->>Middleware: 直接放行
+    end
+
+    Middleware->>Middleware: 检查商家请求
+    
+    alt 商家访问非商家接口
+        Middleware-->>前端: 403 商家账号无权访问此接口
+    end
+
+    Middleware->>Middleware: 最长前缀匹配路由权限码
+    Middleware->>Middleware: ROUTE_PERMISSION_MAP查找
+    
+    alt 路由不在映射表中
+        Middleware->>Middleware: 放行(fail-open)
+    end
+
+    Middleware->>Redis: get(rbac:permissions:{roleId})
+    
+    alt Redis命中
+        Redis-->>Middleware: 返回权限码数组
+    else Redis未命中/异常
+        Middleware->>PermissionService: findByRoleId(roleId)
+        PermissionService->>DB: SELECT * FROM permission<br/>JOIN role_permission<br/>WHERE role_id=?
+        DB-->>PermissionService: 返回权限列表
+        PermissionService-->>Middleware: 返回权限码数组
+        Middleware->>Redis: set(rbac:permissions:{roleId}, EX=300)
+    end
+
+    Middleware->>Middleware: 检查权限码是否包含
+    
+    alt 权限不足
+        Middleware-->>前端: 403 权限不足，无法执行此操作
+    end
+
+    Middleware->>Middleware: 放行请求
+    Note right of Middleware: Controller处理业务逻辑 -> 返回响应
+        </pre>
+      </div>
+
+      <div class="legend">
+        <h3>图例说明</h3>
+        <div class="legend-items">
+          <div class="legend-item">
+            <span class="legend-dot success"></span>
+            <span>成功路径</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot error"></span>
+            <span>错误/异常路径</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot warning"></span>
+            <span>警告/特殊处理</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot info"></span>
+            <span>信息/流程节点</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-ref">
+        <strong>代码引用：</strong><br/>
+        登录控制器：backend/src/controller/auth.controller.ts<br/>
+        管理员服务：backend/src/service/admin.service.ts<br/>
+        认证中间件：backend/src/configuration.ts (JWT认证 + RBAC权限校验)<br/>
+        数据库脚本：backend/sql/init.sql
+      </div>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1890ff',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#1890ff',
+        lineColor: '#d9d9d9',
+        secondaryColor: '#52c41a',
+        tertiaryColor: '#ff4d4f',
+        backgroundColor: '#ffffff',
+        actorBorder: '#1890ff',
+        actorBackground: '#f0f5ff',
+        noteBackground: '#fffbe6',
+        noteBorder: '#ffe58f',
+      },
+      sequence: {
+        diagramMarginX: 50,
+        diagramMarginY: 20,
+        actorMargin: 30,
+        width: 1200,
+        height: 600,
+      }
+    });
+
+    function showDiagram(type) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelector(`[onclick="showDiagram('${type}')"]`).classList.add('active');
+      
+      document.querySelectorAll('.diagram-wrapper').forEach(wrapper => {
+        wrapper.style.display = 'none';
+      });
+      document.getElementById(`${type}-diagram`).style.display = 'block';
+      
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+    }
+  </script>
+</body>
+</html>

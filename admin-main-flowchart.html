@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>超级管理员业务逻辑总流程图</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      background: #1a1a2e;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+    .header p {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+    }
+    .diagram-container {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: calc(100vh - 120px);
+    }
+    .diagram-wrapper {
+      min-width: fit-content;
+    }
+    .legend {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+    .legend h3 {
+      font-size: 13px;
+      color: #666;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #777;
+    }
+    .legend-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .legend-box.start { background: #52c41a; color: #fff; }
+    .legend-box.end { background: #1890ff; color: #fff; }
+    .legend-box.process { background: #f0f5ff; border: 1px solid #1890ff; }
+    .legend-box.decision { background: #fffbe6; border: 1px solid #faad14; }
+    .legend-box.io { background: #f6ffed; border: 1px solid #52c41a; }
+    .legend-box.subgraph { background: #f5f5f5; border: 1px dashed #d9d9d9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>乌东文旅平台 · 超级管理员业务逻辑总流程图</h1>
+      <p>管理后台核心业务全景视图</p>
+    </div>
+
+    <div class="diagram-container">
+      <div class="diagram-wrapper">
+        <pre class="mermaid">
+flowchart TD
+    subgraph 登录认证 ["登录认证模块"]
+        A[开始] --> B[输入账号密码]
+        B --> C{验证账号}
+        C -->|失败| D[返回错误]
+        C -->|成功| E[发送验证码]
+        E --> F[验证验证码]
+        F -->|失败| D
+        F -->|成功| G[生成JWT Token]
+        G --> H[记录登录信息]
+        H --> I[进入管理后台]
+    end
+
+    subgraph 权限管理 ["权限管理模块"]
+        J[验证Token] --> K{Token有效?}
+        K -->|否| L[拒绝访问]
+        K -->|是| M[解析角色权限]
+        M --> N{权限校验}
+        N -->|不足| L
+        N -->|通过| O[放行请求]
+        O --> P[执行业务逻辑]
+    end
+
+    subgraph 商家管理 ["商家管理模块"]
+        Q[提交入驻申请] --> R[审核申请]
+        R -->|驳回| S[通知申请人]
+        R -->|通过| T[创建商家账号]
+        T --> U[商家登录]
+        U --> V[完善店铺信息]
+        V --> W[发布商品]
+        W --> X{违规检查}
+        X -->|违规| Y[封禁店铺]
+        X -->|正常| Z[继续运营]
+    end
+
+    subgraph 订单管理 ["订单管理模块"]
+        AA[用户下单] --> AB[生成订单]
+        AB --> AC[用户支付]
+        AC --> AD[商家发货]
+        AD --> AE[订单完成]
+        AE --> AF{申请退款?}
+        AF -->|否| AG[订单结束]
+        AF -->|是| AH[审核退款]
+        AH -->|拒绝| AI[通知用户]
+        AH -->|通过| AJ[执行退款]
+        AJ --> AK[更新订单状态]
+    end
+
+    subgraph 财务结算 ["财务结算模块"]
+        AL[订单完成] --> AM[生成财务记录]
+        AM --> AN[计算抽佣]
+        AN --> AO[等待结算周期]
+        AO --> AP[自动结算]
+        AP --> AQ[生成结算单]
+        AQ --> AR[商家申请提现]
+        AR --> AS[审核提现]
+        AS -->|拒绝| AT[通知商家]
+        AS -->|通过| AU[执行转账]
+        AU --> AV[生成财务报表]
+    end
+
+    subgraph 内容运营 ["内容运营模块"]
+        AW[发布公告] --> AX[管理轮播图]
+        AX --> AY[管理活动横幅]
+        AY --> AZ[配置推荐位]
+        AZ --> BA[内容审核]
+    end
+
+    subgraph 系统管理 ["系统管理模块"]
+        BB[系统配置] --> BC[敏感词管理]
+        BC --> BD[操作日志]
+        BD --> BE[消息模板]
+    end
+
+    I --> J
+    P --> Q
+    P --> AA
+    P --> AL
+    P --> AW
+    P --> BB
+    Z --> AA
+    AK --> AL
+
+    style A fill:#52c41a,color:#fff,font-weight:bold
+    style AG fill:#1890ff,color:#fff,font-weight:bold
+    style AV fill:#1890ff,color:#fff,font-weight:bold
+    style D fill:#ff4d4f,color:#fff
+    style L fill:#ff4d4f,color:#fff
+    style S fill:#ff7a45,color:#fff
+    style AI fill:#ff7a45,color:#fff
+    style AT fill:#ff7a45,color:#fff
+    style Y fill:#ff4d4f,color:#fff
+    style C fill:#fffbe6,stroke:#faad14
+    style F fill:#fffbe6,stroke:#faad14
+    style K fill:#fffbe6,stroke:#faad14
+    style N fill:#fffbe6,stroke:#faad14
+    style X fill:#fffbe6,stroke:#faad14
+    style AF fill:#fffbe6,stroke:#faad14
+    style AH fill:#fffbe6,stroke:#faad14
+    style AS fill:#fffbe6,stroke:#faad14
+    style 登录认证 fill:#e6f7ff,stroke:#91d5ff,stroke-width:2px
+    style 权限管理 fill:#f6ffed,stroke:#b7eb8f,stroke-width:2px
+    style 商家管理 fill:#fff7e6,stroke:#ffd591,stroke-width:2px
+    style 订单管理 fill:#f9f0ff,stroke:#d3adf7,stroke-width:2px
+    style 财务结算 fill:#fff0f6,stroke:#ffadd2,stroke-width:2px
+    style 内容运营 fill:#e6fffb,stroke:#87e8de,stroke-width:2px
+    style 系统管理 fill:#f6f6f6,stroke:#d9d9d9,stroke-width:2px
+        </pre>
+      </div>
+
+      <div class="legend">
+        <h3>图例：</h3>
+        <div class="legend-item">
+          <span class="legend-box start">●</span>
+          <span>开始</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-box end">●</span>
+          <span>结束</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-box process">□</span>
+          <span>处理步骤</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-box decision">◇</span>
+          <span>判断节点</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-box io">◇</span>
+          <span>输入/输出</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-box subgraph">▭</span>
+          <span>业务模块</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1890ff',
+        primaryTextColor: '#333',
+        primaryBorderColor: '#1890ff',
+        lineColor: '#999',
+        secondaryColor: '#52c41a',
+        tertiaryColor: '#ff4d4f',
+        backgroundColor: '#ffffff',
+        fontSize: '12px',
+      },
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'linear',
+        nodeSpacing: 20,
+        rankSpacing: 30,
+      }
+    });
+  </script>
+</body>
+</html>
