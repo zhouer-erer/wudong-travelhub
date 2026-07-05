@@ -963,3 +963,26 @@ npm run test:coverage # 运行测试并生成覆盖率报告
 - 梯田绿：#6B8E3D（辅色）
 - 黎明金：#D4A14B（辅色）
 - 蜡染棕：#7A5230（辅色）
+
+<img width="1105" height="631" alt="image" src="https://github.com/user-attachments/assets/53978a06-0029-48bb-ad23-c08eb1bbb7ab" />
+<img width="1106" height="628" alt="image" src="https://github.com/user-attachments/assets/d5d43be7-4cd3-4dfc-8749-22ee1d7411fb" />
+<img width="1106" height="656" alt="image" src="https://github.com/user-attachments/assets/2143b8f8-7881-4989-902c-b97161497202" />
+<img width="1106" height="650" alt="image" src="https://github.com/user-attachments/assets/8d59fca3-2051-458c-98d5-2fea2ad8ef70" />
+<img width="1106" height="641" alt="image" src="https://github.com/user-attachments/assets/4652213b-98eb-461d-afd9-bf4c9cff68da" />
+<img width="1106" height="655" alt="image" src="https://github.com/user-attachments/assets/7ea7261b-2e5f-450c-9660-586faa4cf5d5" />
+<img width="1107" height="620" alt="image" src="https://github.com/user-attachments/assets/8a2cb136-e77b-48ec-bcf7-0e5675bb249a" />
+<img width="1106" height="652" alt="image" src="https://github.com/user-attachments/assets/3807fd78-6995-4100-8f36-691f8d1ed549" />
+<img width="1107" height="678" alt="image" src="https://github.com/user-attachments/assets/08425b14-dda9-4acc-aef1-072043fdebcf" />
+<img width="1106" height="636" alt="image" src="https://github.com/user-attachments/assets/a399bc47-c116-458f-a2e0-31611c982eaa" />
+<img width="1106" height="636" alt="image" src="https://github.com/user-attachments/assets/c32add81-dca5-49cc-a597-2e304ae4eff8" />
+
+
+
+
+
+
+
+
+
+
+
